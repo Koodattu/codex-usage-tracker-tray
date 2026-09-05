@@ -38,6 +38,7 @@ internal sealed class QuotaNotifications
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException || ex is InvalidOperationException || ex is FormatException)
         {
             unreadable = true;
+            DiagnosticLog.Current?.Write("alerts.load_failed", ex);
         }
     }
 
@@ -102,6 +103,7 @@ internal sealed class QuotaNotifications
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
             Warning = "Alert state could not be saved. Notifications paused.";
+            DiagnosticLog.Current?.Write("alerts.save_failed", ex);
             return null;
         }
         if (messages.Count == 0) return null;

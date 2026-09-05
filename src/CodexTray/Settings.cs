@@ -37,6 +37,7 @@ internal sealed class Settings
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException || ex is InvalidOperationException)
         {
             LoadFailed = true;
+            DiagnosticLog.Current?.Write("settings.load_failed", ex);
             return new Settings();
         }
     }

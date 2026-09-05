@@ -210,11 +210,13 @@ internal sealed class UsageHistory
                 accountKey = snapshot.AccountKey;
                 foreach (var row in loaded.Rows) AddPoint(row.Pool, row.Point, snapshot.ReadAt);
                 loadWarning = loaded.SkippedRows ? "Some saved history could not be read." : null;
+                if (loaded.SkippedRows) DiagnosticLog.Current?.Write("history.rows_skipped");
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
                 accountKey = snapshot.AccountKey;
                 loadWarning = "Saved history could not be opened.";
+                DiagnosticLog.Current?.Write("history.load_failed", ex);
             }
         }
         Add(snapshot);
@@ -229,6 +231,7 @@ internal sealed class UsageHistory
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
             writeWarning = "Usage updated. History could not be saved.";
+            DiagnosticLog.Current?.Write("history.save_failed", ex);
         }
     }
 

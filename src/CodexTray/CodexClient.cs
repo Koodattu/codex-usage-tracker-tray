@@ -36,6 +36,7 @@ internal sealed class CodexClient
         process.ErrorDataReceived += (_, __) => { };
         try
         {
+            DiagnosticLog.Current?.Write("codex.starting");
             StartWithRawInput(process);
             using var job = new ProcessJob(process);
             process.BeginErrorReadLine();
@@ -46,10 +47,12 @@ internal sealed class CodexClient
                     clientInfo = new { name = "codex_usage_tray", title = "Codex Tray", version = typeof(CodexClient).Assembly.GetName().Version!.ToString(3) }
                 }, timeout.Token).ConfigureAwait(false);
                 await SendAsync(process, new { method = "initialized", @params = new { } }).ConfigureAwait(false);
+                DiagnosticLog.Current?.Write("codex.reading_account");
                 var accountResponse = await RequestAsync(process, 2, "account/read", new { refreshToken = false }, timeout.Token).ConfigureAwait(false);
                 var account = Json.Object(accountResponse, "account");
                 if (account == null) throw new UsageException("Sign in to Codex with your ChatGPT account, then refresh.", true);
                 if (Json.String(account, "type") != "chatgpt") throw new UsageException("Sign in to Codex with a ChatGPT account to see usage limits.", true);
+                DiagnosticLog.Current?.Write("codex.reading_limits");
                 var result = await RequestAsync(process, 3, "account/rateLimits/read", new { }, timeout.Token).ConfigureAwait(false);
                 var snapshot = UsageParser.Parse(result, DateTimeOffset.UtcNow);
                 var identity = Json.String(account, "email");
@@ -65,18 +68,22 @@ internal sealed class CodexClient
                 // Closing stdin lets Codex shut down normally. The job also reaps descendants.
                 process.StandardInput.BaseStream.Close();
                 if (!await Task.Run(() => process.WaitForExit(1000)).ConfigureAwait(false) && !process.HasExited) process.Kill();
+                DiagnosticLog.Current?.Write("codex.closed");
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
+            DiagnosticLog.Current?.Write("codex.timeout");
             throw new UsageException("Codex took too long to respond. Retrying automatically.");
         }
         catch (Exception ex) when (ex is Win32Exception || ex is IOException || ex is InvalidOperationException)
         {
+            DiagnosticLog.Current?.Write("codex.transport_failed", ex);
             throw new UsageException("Could not read Codex usage. Check your connection and Codex sign-in.");
         }
         catch (Exception ex) when (ex is ArgumentException || ex is FormatException)
         {
+            DiagnosticLog.Current?.Write("codex.response_invalid", ex);
             throw new UsageException("Codex returned an unreadable response. Try updating Codex.");
         }
     }

@@ -85,6 +85,7 @@ internal sealed class TrayApplication : ApplicationContext
     private async Task RefreshAsync(bool manual)
     {
         if (exiting || busy || !policy.CanRefresh(DateTimeOffset.UtcNow, manual)) return;
+        DiagnosticLog.Current?.Write(manual ? "refresh.started_manual" : "refresh.started_automatic");
         busy = true;
         policy.Started(DateTimeOffset.UtcNow);
         message = "Refreshing usage…";
@@ -100,15 +101,17 @@ internal sealed class TrayApplication : ApplicationContext
             snapshot = value;
             await history.AddAsync(value);
             if (exiting) return;
+            DiagnosticLog.Current?.Write("refresh.history_complete");
             success = true;
             failed = false;
             var alert = notifications.Evaluate(value, settings, DateTimeOffset.UtcNow);
             if (alert != null) Notify(alert);
             message = history.Warning ?? notifications.Warning ?? (value.FiveHour == null && value.Weekly == null ? "Codex did not provide 5-hour or weekly limits." : "Connected to Codex");
         }
-        catch (OperationCanceledException) when (exiting) { return; }
+        catch (OperationCanceledException) when (exiting) { DiagnosticLog.Current?.Write("refresh.cancelled_shutdown"); return; }
         catch (UsageException ex)
         {
+            DiagnosticLog.Current?.Write(ex.SignInRequired ? "refresh.sign_in_required" : "refresh.failed", ex);
             failed = true;
             message = ex.Message;
             if (ex.SignInRequired) { snapshot = null; history.Clear(); }
@@ -120,6 +123,7 @@ internal sealed class TrayApplication : ApplicationContext
             {
                 policy.Finished(DateTimeOffset.UtcNow, success, random.NextDouble() * 15);
                 UpdateView();
+                DiagnosticLog.Current?.Write(success ? "refresh.completed" : "refresh.backoff");
             }
         }
     }
@@ -166,10 +170,15 @@ internal sealed class TrayApplication : ApplicationContext
         old?.Dispose();
     }
 
-    private void TogglePopup() { if (popup.Visible) popup.Hide(); else popup.ShowNearTray(); }
+    private void TogglePopup()
+    {
+        DiagnosticLog.Current?.Write(popup.Visible ? "popup.hide" : "popup.show");
+        if (popup.Visible) popup.Hide(); else popup.ShowNearTray();
+    }
 
     private void BuildMenu()
     {
+        DiagnosticLog.Current?.Write("menu.opening");
         while (menu.Items.Count > 0) { var item = menu.Items[0]; menu.Items.RemoveAt(0); item.Dispose(); }
         menu.Items.Add("Show usage", null, (_, __) => popup.ShowNearTray());
         var refresh = menu.Items.Add(busy ? "Refreshing…" : "Refresh now", null, async (_, __) => await RefreshAsync(true));
@@ -193,6 +202,7 @@ internal sealed class TrayApplication : ApplicationContext
         menu.Items.Add(visible);
         menu.Items.Add("Settings…", null, (_, __) => ShowSettings());
         menu.Items.Add("About / Check for updates…", null, (_, __) => ShowSettings(true));
+        menu.Items.Add("Open logs", null, (_, __) => OpenLogs());
         menu.Items.Add(new ToolStripMenuItem("Pause automatic refresh", null, (_, __) => { paused = !paused; UpdateView(); }) { Checked = paused });
         try
         {
@@ -249,6 +259,7 @@ internal sealed class TrayApplication : ApplicationContext
     }
     private void ShowSettings(bool about = false)
     {
+        DiagnosticLog.Current?.Write("settings.opening");
         menu.Close();
         popup.KeepOpen = true;
         try
@@ -257,6 +268,7 @@ internal sealed class TrayApplication : ApplicationContext
             RunAction(() => startup = WindowsIntegration.StartsWithWindows());
             using var dialog = new SettingsForm(settings, startup, updates);
             dialog.ReleasesRequested += (_, __) => RunAction(() => Process.Start(new ProcessStartInfo(ReleaseUpdates.ReleasesUrl) { UseShellExecute = true }));
+            dialog.LogsRequested += (_, __) => OpenLogs();
             if (about) dialog.ShowAbout();
             if (dialog.ShowFor(popup) != DialogResult.OK) return;
             SaveSetting(() =>
@@ -273,14 +285,20 @@ internal sealed class TrayApplication : ApplicationContext
             if (startup.HasValue && startup.Value != dialog.StartWithWindows)
                 RunAction(() => WindowsIntegration.SetStartWithWindows(dialog.StartWithWindows));
         }
-        finally { popup.KeepOpen = false; if (popup.Visible) popup.Activate(); }
+        finally { DiagnosticLog.Current?.Write("settings.closed"); popup.KeepOpen = false; if (popup.Visible) popup.Activate(); }
     }
+    private void OpenLogs() => RunAction(() =>
+    {
+        Directory.CreateDirectory(DiagnosticLog.DirectoryPath);
+        Process.Start(new ProcessStartInfo(DiagnosticLog.DirectoryPath) { UseShellExecute = true });
+    });
     private void RunAction(Action action)
     {
         try { action(); }
-        catch (UsageException ex) { Notify(ex.Message); }
+        catch (UsageException ex) { DiagnosticLog.Current?.Write("action.failed", ex); Notify(ex.Message); }
         catch (Exception ex) when (ex is Win32Exception || ex is IOException || ex is UnauthorizedAccessException || ex is SecurityException || ex is ArgumentException || ex is System.Runtime.InteropServices.COMException || ex is System.Reflection.TargetInvocationException)
         {
+            DiagnosticLog.Current?.Write("action.failed", ex);
             Notify("Windows could not complete that action. Check the selected app path or your permissions.");
         }
     }
@@ -291,6 +309,7 @@ internal sealed class TrayApplication : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        DiagnosticLog.Current?.Write("app.stopping");
         exiting = true;
         lifetime.Cancel();
         timer.Stop();

@@ -29,11 +29,13 @@ internal sealed class SettingsForm : Form
     private readonly NumericUpDown critical = PercentInput(1, 98);
     private readonly Button checkUpdates = Button("Check for updates", true);
     private readonly Button releases = Button("Open Releases", false);
+    private readonly Button openLogs = Button("Open logs", false);
     private readonly Label updateStatus = new Label { ForeColor = Theme.Muted, Text = "Updates are checked only when you ask.", AutoSize = false };
     private readonly CancellationTokenSource closing = new CancellationTokenSource();
     private readonly ReleaseUpdates? updates;
     private int tab;
     public event EventHandler? ReleasesRequested;
+    public event EventHandler? LogsRequested;
     public bool LowQuotaAlerts => lowAlerts.Checked;
     public bool RestoredAlerts => restoredAlerts.Checked;
     public bool ExpiryAlerts => expiryAlerts.Checked;
@@ -60,7 +62,7 @@ internal sealed class SettingsForm : Form
         styleGroup.Controls.AddRange(new Control[] { numbers, rings });
         iconsGroup.Controls.AddRange(new Control[] { weekly, fiveHour, rotate, both });
         Controls.AddRange(new Control[] { styleGroup, iconsGroup, interval, startup, save, cancel });
-        Controls.AddRange(new Control[] { displayTab, alertsTab, aboutTab, lowAlerts, restoredAlerts, expiryAlerts, warning, critical, checkUpdates, releases, updateStatus });
+        Controls.AddRange(new Control[] { displayTab, alertsTab, aboutTab, lowAlerts, restoredAlerts, expiryAlerts, warning, critical, checkUpdates, releases, updateStatus, openLogs });
         displayTab.Click += (_, __) => ShowTab(0);
         alertsTab.Click += (_, __) => ShowTab(1);
         aboutTab.Click += (_, __) => ShowTab(2);
@@ -89,6 +91,7 @@ internal sealed class SettingsForm : Form
             finally { if (!closing.IsCancellationRequested) checkUpdates.Enabled = true; }
         };
         releases.Click += (_, __) => ReleasesRequested?.Invoke(this, EventArgs.Empty);
+        openLogs.Click += (_, __) => LogsRequested?.Invoke(this, EventArgs.Empty);
         FormClosed += (_, __) => closing.Cancel();
         numbers.Checked = settings.DisplayMode != "rings";
         rings.Checked = settings.DisplayMode == "rings";
@@ -114,7 +117,7 @@ internal sealed class SettingsForm : Form
         tab = value;
         foreach (var control in new Control[] { styleGroup, iconsGroup, interval, startup }) control.Visible = tab == 0;
         foreach (var control in new Control[] { lowAlerts, restoredAlerts, expiryAlerts, warning, critical }) control.Visible = tab == 1;
-        foreach (var control in new Control[] { checkUpdates, releases, updateStatus }) control.Visible = tab == 2;
+        foreach (var control in new Control[] { checkUpdates, releases, updateStatus, openLogs }) control.Visible = tab == 2;
         foreach (var button in new[] { displayTab, alertsTab, aboutTab })
         {
             bool selected = button == (tab == 0 ? displayTab : tab == 1 ? alertsTab : aboutTab);
@@ -158,6 +161,7 @@ internal sealed class SettingsForm : Form
         Set(restoredAlerts, 24, 285, 392, 30, scale); Set(expiryAlerts, 24, 336, 392, 30, scale);
         Set(checkUpdates, 24, 286, 190, 38, scale); Set(releases, 226, 286, 190, 38, scale);
         Set(updateStatus, 24, 343, 392, 70, scale);
+        Set(openLogs, 24, 514, 190, 38, scale);
         Set(cancel, 24, 574, 186, 38, scale); Set(save, 222, 574, 194, 38, scale);
     }
 
@@ -214,7 +218,7 @@ internal sealed class SettingsForm : Form
         if (disposing)
         {
             closing.Cancel();
-            foreach (var control in new Control[] { numbers, rings, weekly, fiveHour, rotate, both, interval, startup, save, cancel, displayTab, alertsTab, aboutTab, lowAlerts, restoredAlerts, expiryAlerts, warning, critical, checkUpdates, releases, updateStatus }) control.Font.Dispose();
+            foreach (var control in new Control[] { numbers, rings, weekly, fiveHour, rotate, both, interval, startup, save, cancel, displayTab, alertsTab, aboutTab, lowAlerts, restoredAlerts, expiryAlerts, warning, critical, checkUpdates, releases, updateStatus, openLogs }) control.Font.Dispose();
             closing.Dispose();
         }
         base.Dispose(disposing);

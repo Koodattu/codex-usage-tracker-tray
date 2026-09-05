@@ -50,10 +50,8 @@ internal sealed class DpiMenu : ContextMenuStrip
     private Font? scaledFont;
     public void SetDpi(uint dpi)
     {
-        var previous = scaledFont;
-        scaledFont = new Font("Segoe UI", 13 * dpi / 96f, FontStyle.Regular, GraphicsUnit.Pixel);
-        Font = scaledFont;
-        previous?.Dispose();
+        Theme.SetFont(this, 13 * dpi / 96f);
+        scaledFont = Font;
         ImageScalingSize = new Size((int)(16 * dpi / 96), (int)(16 * dpi / 96));
     }
     protected override void Dispose(bool disposing)

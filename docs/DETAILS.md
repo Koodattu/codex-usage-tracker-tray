@@ -72,6 +72,14 @@ The weekly daily budget divides remaining percentage by fractional days to the r
 
 About shows the installed assembly version. Check for updates makes one unauthenticated HTTPS GET to this repository's GitHub latest-release endpoint, with a ten-second timeout and a one-minute cache. GitHub rate-limit errors pause checks for an hour. Opening About does not check automatically. Draft, prerelease, or malformed version metadata is rejected. Open Releases always opens this repository's fixed HTTPS release page; response-provided download URLs are not executed. Nothing downloads or replaces the EXE in the background. Reset credits remain strictly read-only: there is no redemption action or API request.
 
+## Crash diagnostics
+
+**About → Open logs** and the tray menu open `%LOCALAPPDATA%\CodexTray\logs`. `current.log` rotates into `previous.log` and `older.log`; each file is limited to 256 KiB (768 KiB total). Entries use UTC timestamps, executable version, process ID, uptime, and app-defined operation labels. Restarting appends to the existing log. Normal refreshes record their stages; drawing and rotation timer ticks are not logged.
+
+UI, main-thread, background-thread, and unobserved-task exceptions are recorded with exception types, HRESULTs, and up to 24 metadata-only stack frames per exception (at most eight exceptions per entry). Messages, exception data, source paths, account identity, usage responses, and Codex stderr are excluded. Expected connection/storage failures retain their existing retry or warning behavior and now leave diagnostic evidence. Logging failures do not stop tracking.
+
+An unexpected UI/main error is logged and the app exits rather than continuing in an unknown state or waiting on an invisible error dialog. `app.stopped` marks a normal shutdown; `app.stopped_after_error` marks a handled fatal error. Forced termination, power loss, and some native/runtime failures cannot run managed exception handlers, so an abruptly ending log alone does not identify a cause. Preserve all three logs when reporting an unexplained exit. No crash dumps or telemetry are collected.
+
 ## Windows integration
 
 CLI detection checks versioned app-managed runtimes (newest file first), the standalone installation, PATH, and common npm native-binary locations. **Setup → Choose Codex CLI executable…** handles custom installations; select the command-line binary, not the desktop GUI or an npm `.cmd` launcher.

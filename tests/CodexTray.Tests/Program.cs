@@ -19,6 +19,7 @@ internal static partial class Program
     private static int Main(string[] args)
     {
         if (args.FirstOrDefault() == "app-server") return FakeServer(args);
+        if (args.FirstOrDefault() == "--diagnostic-child") return DiagnosticChild(args[1], args[2]);
         try
         {
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
@@ -243,6 +244,7 @@ internal static partial class Program
             });
             Environment.SetEnvironmentVariable("CODEX_TRAY_FAKE", null);
             FeatureChecks();
+            DiagnosticChecks();
             Application.EnableVisualStyles();
             Run("Single icon is the default and unavailable limits are never selected", () =>
             {
@@ -428,6 +430,10 @@ internal static partial class Program
         dialog.ReleasesRequested += (_, __) => openedReleases = true;
         dialog.Controls.OfType<Button>().Single(b => b.Text == "Open Releases").PerformClick();
         Check(openedReleases);
+        bool openedLogs = false;
+        dialog.LogsRequested += (_, __) => openedLogs = true;
+        dialog.Controls.OfType<Button>().Single(b => b.Text == "Open logs").PerformClick();
+        Check(openedLogs);
         using (var bitmap = new Bitmap(660, 954)) { dialog.DrawToBitmap(bitmap, new Rectangle(0, 0, 660, 954)); bitmap.Save(Path.Combine(directory, "preview-about-150.png")); }
     }
 
