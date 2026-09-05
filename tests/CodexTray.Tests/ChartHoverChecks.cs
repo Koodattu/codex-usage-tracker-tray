@@ -62,7 +62,7 @@ internal static partial class Program
             foreach (var scale in new[] { 1f, 1.5f, 2f })
             {
                 form.ClientSize = new Size((int)(440 * scale), (int)(636 * scale));
-                MoveChartMouse(form, (int)(231 * scale), (int)(340 * scale));
+                MoveChartMouse(form, 231, 340);
                 Equal(point, form.HoveredChartPoint);
                 using var bitmap = new Bitmap(form.Width, form.Height);
                 form.DrawToBitmap(bitmap, form.ClientRectangle);
@@ -77,7 +77,7 @@ internal static partial class Program
             foreach (var hours in new[] { 23.8, .05 })
             {
                 point.Time = now.AddHours(-hours);
-                MoveChartMouse(form, (int)((49 + 365 * (1 - hours / 24)) * 1.5), 510);
+                MoveChartMouse(form, (float)(49 + 365 * (1 - hours / 24)), 340);
                 Equal(point, form.HoveredChartPoint);
                 using var bitmap = new Bitmap(form.Width, form.Height);
                 form.DrawToBitmap(bitmap, form.ClientRectangle);
@@ -85,10 +85,14 @@ internal static partial class Program
             }
             form.Controls.OfType<Button>().Single(b => b.AccessibleName == "Past 7 days").PerformClick();
             Check(form.HoveredChartPoint == null);
-            MoveChartMouse(form, 619, 510); Equal(point, form.HoveredChartPoint);
-            form.Hide(); Check(form.HoveredChartPoint == null);
-            form.Show(); Application.DoEvents();
-            MoveChartMouse(form, 619, 510); Equal(point, form.HoveredChartPoint);
+            MoveChartMouse(form, 413, 340); Equal(point, form.HoveredChartPoint);
+            foreach (var scale in new[] { 1f, 1.5f, 2f })
+            {
+                form.Hide(); Check(form.HoveredChartPoint == null);
+                form.ClientSize = new Size((int)(440 * scale), (int)(636 * scale));
+                form.Show(); Application.DoEvents();
+                MoveChartMouse(form, 413, 340); Equal(point, form.HoveredChartPoint);
+            }
             history.SelectPool("codex_extra");
             form.UpdateUsage(snapshot, "Sample data", false, false, now, true);
             Check(form.HoveredChartPoint == null);
@@ -96,7 +100,9 @@ internal static partial class Program
         });
     }
 
-    private static void MoveChartMouse(PopupForm form, int x, int y) =>
+    // Windows can resize the native window when it is shown again.
+    private static void MoveChartMouse(PopupForm form, float x, float y) =>
         typeof(PopupForm).GetMethod("OnMouseMove", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(form, new object[] { new MouseEventArgs(MouseButtons.None, 0, x, y, 0) });
+            .Invoke(form, new object[] { new MouseEventArgs(MouseButtons.None, 0,
+                (int)(x * form.ClientSize.Width / 440f), (int)(y * form.ClientSize.Height / 636f), 0) });
 }
