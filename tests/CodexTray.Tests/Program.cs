@@ -192,6 +192,18 @@ internal static class Program
                 Equal(64d, value.FiveHour!.Remaining); Equal(34d, value.Weekly!.Remaining);
                 Check(SpinWait.SpinUntil(() => !TestProcesses().Except(before).Any(), 2000));
             });
+            Run("Transport sends valid JSON under a UTF-8 Windows console", () =>
+            {
+                var original = Console.InputEncoding;
+                try
+                {
+                    Console.InputEncoding = new System.Text.UTF8Encoding(true);
+                    Environment.SetEnvironmentVariable("CODEX_TRAY_FAKE", "normal");
+                    var value = new CodexClient().ReadAsync(Application.ExecutablePath, CancellationToken.None).GetAwaiter().GetResult();
+                    Equal(64d, value.FiveHour!.Remaining); Equal(34d, value.Weekly!.Remaining);
+                }
+                finally { Console.InputEncoding = original; }
+            });
             Run("Protocol errors never expose backend details", () =>
             {
                 Environment.SetEnvironmentVariable("CODEX_TRAY_FAKE", "error");
@@ -444,12 +456,12 @@ internal static class Program
         var executable = WindowsIntegration.FindCodex(null) ?? throw new Exception("Codex not found");
         using var process = new Process { StartInfo = new ProcessStartInfo(executable, "app-server --listen stdio://") { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true } };
         process.ErrorDataReceived += (_, __) => { };
-        process.Start();
+        CodexClient.StartWithRawInput(process);
         using var job = new ProcessJob(process);
         process.BeginErrorReadLine();
         using var timeout = new CancellationTokenSource(25000);
         await CodexClient.RequestAsync(process, 1, "initialize", new { clientInfo = new { name = "codex_usage_tray", version = "1.0.0" } }, timeout.Token);
-        await process.StandardInput.WriteLineAsync("{\"method\":\"initialized\"}");
+        await CodexClient.SendAsync(process, new { method = "initialized" });
         var response = await CodexClient.RequestAsync(process, 2, "account/rateLimits/read", new { }, timeout.Token);
         var buckets = Json.Object(response, "rateLimitsByLimitId");
         if (buckets != null)
@@ -463,7 +475,7 @@ internal static class Program
                     Console.WriteLine(name + " duration in minutes: " + (window == null ? "unavailable" : Json.Number(window, "windowDurationMins")?.ToString() ?? "unspecified"));
                 }
             }
-        process.StandardInput.Close();
+        process.StandardInput.BaseStream.Close();
         process.WaitForExit(1000);
     }
 

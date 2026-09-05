@@ -36,7 +36,7 @@ internal sealed class CodexClient
         process.ErrorDataReceived += (_, __) => { };
         try
         {
-            process.Start();
+            StartWithRawInput(process);
             using var job = new ProcessJob(process);
             process.BeginErrorReadLine();
             try
@@ -63,7 +63,7 @@ internal sealed class CodexClient
             finally
             {
                 // Closing stdin lets Codex shut down normally. The job also reaps descendants.
-                process.StandardInput.Close();
+                process.StandardInput.BaseStream.Close();
                 if (!await Task.Run(() => process.WaitForExit(1000)).ConfigureAwait(false) && !process.HasExited) process.Kill();
             }
         }
@@ -81,7 +81,23 @@ internal sealed class CodexClient
         }
     }
 
-    private static Task SendAsync(Process process, object value) => process.StandardInput.WriteLineAsync(Json.Serializer().Serialize(value));
+    internal static async Task SendAsync(Process process, object value)
+    {
+        // The framework's stdin writer inherits the Windows console encoding and may emit a BOM.
+        var bytes = Encoding.UTF8.GetBytes(Json.Serializer().Serialize(value) + "\n");
+        var input = process.StandardInput.BaseStream;
+        await input.WriteAsync(bytes, 0, bytes.Length).ConfigureAwait(false);
+        await input.FlushAsync().ConfigureAwait(false);
+    }
+
+    internal static void StartWithRawInput(Process process)
+    {
+        // Framework 4.8 flushes the console encoding's BOM while creating redirected stdin.
+        // BOM-free UTF-16 sets only the managed console cache, even in a tray app with no console.
+        // We never use that text writer: SendAsync writes UTF-8 bytes directly to its pipe.
+        Console.InputEncoding = new UnicodeEncoding(false, false);
+        process.Start();
+    }
 
     internal static async Task<Dictionary<string, object?>> RequestAsync(Process process, int id, string method, object parameters, CancellationToken token)
     {
