@@ -397,6 +397,13 @@ internal static partial class Program
             bitmap.Save(Path.Combine(directory, $"preview-{size.Width}.png"), ImageFormat.Png);
         }
         form.ClientSize = new Size(440, 636);
+        s.FiveHour!.Remaining = s.Weekly!.Remaining = 100;
+        using (var bitmap = new Bitmap(440, 636)) { form.DrawToBitmap(bitmap, form.ClientRectangle); bitmap.Save(Path.Combine(directory, "preview-full.png")); }
+        var weekly = s.Weekly;
+        s.Weekly = null;
+        form.UpdateUsage(s, "Connected to Codex", false, false, now.AddMinutes(5), true);
+        using (var bitmap = new Bitmap(440, 636)) { form.DrawToBitmap(bitmap, form.ClientRectangle); bitmap.Save(Path.Combine(directory, "preview-five-only.png")); }
+        s.Weekly = weekly; s.FiveHour.Remaining = 64; s.Weekly.Remaining = 34;
         form.UpdateUsage(null, "Codex was not found. Choose its executable from the tray menu.", false, true, now.AddMinutes(5), true);
         using (var bitmap = new Bitmap(440, 636)) { form.DrawToBitmap(bitmap, new Rectangle(0, 0, 440, 636)); bitmap.Save(Path.Combine(directory, "preview-empty.png")); }
         s.ReadAt = now.AddMinutes(-25);
@@ -423,6 +430,18 @@ internal static partial class Program
         Equal(30, form.ChartDays); Equal(30, selectedDays);
         using (var bitmap = new Bitmap(660, 954)) { form.DrawToBitmap(bitmap, new Rectangle(0, 0, 660, 954)); bitmap.Save(Path.Combine(directory, "preview-month-150.png")); }
         Equal(3, form.Controls.OfType<ListBox>().Single().Items.Count);
+        var resetRows = form.Controls.OfType<ListBox>().Single();
+        Check(resetRows.ClientSize.Height >= resetRows.ItemHeight * 3);
+        s.ResetCredits.Add(new ResetCredit { ExpiresAt = now.AddMinutes(-1) });
+        s.ResetCredits.Add(new ResetCredit());
+        s.ResetCredits.Add(new ResetCredit { ExpiryKnown = false });
+        s.AvailableResets = 7;
+        form.UpdateUsage(s, "Connected to Codex", false, false, now.AddMinutes(5), true);
+        Equal(7, resetRows.Items.Count);
+        resetRows.TopIndex = 3; resetRows.SelectedIndex = 4;
+        using (var bitmap = new Bitmap(660, 954)) { form.DrawToBitmap(bitmap, form.ClientRectangle); bitmap.Save(Path.Combine(directory, "preview-reset-scroll.png")); }
+        form.UpdateUsage(s, "Connected to Codex", false, false, now.AddMinutes(5), true);
+        Equal(3, resetRows.TopIndex); Equal(4, resetRows.SelectedIndex);
         form.Controls.OfType<Button>().Single(b => b.AccessibleName == "Past 7 days").PerformClick(); Equal(7, form.ChartDays);
         using var dialog = new SettingsForm(new Settings { IconVisibility = "rotate", RotationSeconds = 15 }, false);
         dialog.Location = new Point(-20000, -20000);

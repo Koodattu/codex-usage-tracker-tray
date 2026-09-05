@@ -22,11 +22,11 @@ internal static partial class Program
                 using var form = new PopupForm(history, days);
                 form.ClientSize = new Size((int)(440 * scale), (int)(636 * scale));
                 form.UpdateUsage(new UsageSnapshot { Weekly = new QuotaWindow() }, "Sample", false, false, Now, false);
-                Equal(first, form.ChartPointAt(new Point((int)((49 + 365 * .25) * scale), (int)(300 * scale)), Now));
-                Equal(second, form.ChartPointAt(new Point((int)((49 + 365 * .75) * scale), (int)(300 * scale)), Now));
-                Check(form.ChartPointAt(new Point((int)(230 * scale), (int)(300 * scale)), Now) == null);
+                Equal(first, form.ChartPointAt(new Point((int)((49 + 365 * .25) * scale), (int)(340 * scale)), Now));
+                Equal(second, form.ChartPointAt(new Point((int)((49 + 365 * .75) * scale), (int)(340 * scale)), Now));
+                Check(form.ChartPointAt(new Point((int)(230 * scale), (int)(340 * scale)), Now) == null);
                 Check(form.ChartPointAt(new Point((int)(140 * scale), (int)(260 * scale)), Now) == null);
-                Check(form.ChartPointAt(new Point((int)(140 * scale), (int)(370 * scale)), Now) == null);
+                Check(form.ChartPointAt(new Point((int)(140 * scale), (int)(400 * scale)), Now) == null);
             }
         });
         Run("Chart hover ignores unavailable series, future readings, and old history", () =>
@@ -35,7 +35,7 @@ internal static partial class Program
             using var form = new PopupForm(history);
             var snapshot = new UsageSnapshot { Weekly = new QuotaWindow() };
             form.UpdateUsage(snapshot, "Sample", false, false, Now, false);
-            var location = new Point(230, 300);
+            var location = new Point(230, 340);
             Check(form.ChartPointAt(location, Now) == null);
             history.Points.Add(new HistoryPoint { Time = Now.AddHours(-12), FiveHour = 60 });
             Check(form.ChartPointAt(location, Now) == null);
@@ -44,8 +44,8 @@ internal static partial class Program
             history.Points.Clear();
             history.Points.Add(new HistoryPoint { Time = Now.AddSeconds(1), Weekly = 60 });
             history.Points.Add(new HistoryPoint { Time = Now.AddDays(-1).AddSeconds(-1), Weekly = 60 });
-            Check(form.ChartPointAt(new Point(413, 300), Now) == null);
-            Check(form.ChartPointAt(new Point(49, 300), Now) == null);
+            Check(form.ChartPointAt(new Point(413, 340), Now) == null);
+            Check(form.ChartPointAt(new Point(49, 340), Now) == null);
         });
         Run("Chart hover renders both series and clears on leave, range, hide, and pool changes", () =>
         {
@@ -62,7 +62,7 @@ internal static partial class Program
             foreach (var scale in new[] { 1f, 1.5f, 2f })
             {
                 form.ClientSize = new Size((int)(440 * scale), (int)(636 * scale));
-                MoveChartMouse(form, (int)(231 * scale), (int)(300 * scale));
+                MoveChartMouse(form, (int)(231 * scale), (int)(340 * scale));
                 Equal(point, form.HoveredChartPoint);
                 using var bitmap = new Bitmap(form.Width, form.Height);
                 form.DrawToBitmap(bitmap, form.ClientRectangle);
@@ -77,7 +77,7 @@ internal static partial class Program
             foreach (var hours in new[] { 23.8, .05 })
             {
                 point.Time = now.AddHours(-hours);
-                MoveChartMouse(form, (int)((49 + 365 * (1 - hours / 24)) * 1.5), 450);
+                MoveChartMouse(form, (int)((49 + 365 * (1 - hours / 24)) * 1.5), 510);
                 Equal(point, form.HoveredChartPoint);
                 using var bitmap = new Bitmap(form.Width, form.Height);
                 form.DrawToBitmap(bitmap, form.ClientRectangle);
@@ -85,10 +85,10 @@ internal static partial class Program
             }
             form.Controls.OfType<Button>().Single(b => b.AccessibleName == "Past 7 days").PerformClick();
             Check(form.HoveredChartPoint == null);
-            MoveChartMouse(form, 619, 450); Equal(point, form.HoveredChartPoint);
+            MoveChartMouse(form, 619, 510); Equal(point, form.HoveredChartPoint);
             form.Hide(); Check(form.HoveredChartPoint == null);
             form.Show(); Application.DoEvents();
-            MoveChartMouse(form, 619, 450); Equal(point, form.HoveredChartPoint);
+            MoveChartMouse(form, 619, 510); Equal(point, form.HoveredChartPoint);
             history.SelectPool("codex_extra");
             form.UpdateUsage(snapshot, "Sample data", false, false, now, true);
             Check(form.HoveredChartPoint == null);

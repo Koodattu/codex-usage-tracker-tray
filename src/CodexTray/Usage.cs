@@ -277,9 +277,9 @@ internal sealed class UsageHistory
 
     public IEnumerable<HistoryPoint> InRange(DateTimeOffset now, int days) => Points.Where(p => p.Time >= now.AddDays(-days) && p.Time <= now);
 
-    public string WeeklyUsageSummary(DateTimeOffset now)
+    public string WeeklyUsageSummary(DateTimeOffset now, bool compact = false)
     {
-        const string label = "Weekly used (24h): ";
+        var label = compact ? "" : "Weekly used (24h): ";
         HistoryPoint? previous = null, first = null, last = null;
         double used = 0;
         int pairs = 0;
