@@ -4,6 +4,8 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using CodexTray;
@@ -76,7 +78,63 @@ internal static partial class Program
                 Check(menu.GetPreferredSize(Size.Empty).Width > 0);
             }
         });
+        Run("Separate monitor records clean and forced exits including a zero exit code", () => WithHistoryDirectory(directory =>
+        {
+            foreach (var mode in new[] { "clean", "terminate", "abrupt-zero" })
+            {
+                var path = Path.Combine(directory, mode);
+                var run = Task.Run(() => CrashMonitor.Run(Application.ExecutablePath, "--monitor-probe " + mode, path, 50));
+                Check(run.Wait(10000));
+                Equal(mode == "terminate" ? unchecked((int)0xC0000005) : 0, run.Result);
+                var text = File.ReadAllText(Path.Combine(path, "current.log"));
+                Check(text.Contains("monitor.attached") && text.Contains("monitor.health") && text.Contains("monitor.exited"));
+                Check(text.Contains("shutdown_completed=" + (mode == "clean" ? "true" : "false")));
+                Check(text.Contains(mode == "terminate" ? "exit_code=0xC0000005" : "exit_code=0x00000000"));
+                Check(!File.Exists(Path.Combine(path, "session.pending")));
+                Check(!text.Contains("PRIVATE") && !text.Contains("Bearer"));
+            }
+        }));
+        Run("Monitor retains evidence of an incomplete session and missing UI pulses", () => WithHistoryDirectory(directory =>
+        {
+            File.WriteAllText(Path.Combine(directory, "session.pending"), "PRIVATE");
+            var run = Task.Run(() => CrashMonitor.Run(Application.ExecutablePath, "--monitor-probe stalled", directory, 50));
+            Check(run.Wait(10000)); Equal(0, run.Result);
+            var text = File.ReadAllText(Path.Combine(directory, "current.log"));
+            Check(text.Contains("monitor.previous_session_incomplete") && text.Contains("missed_ui_pulses=2"));
+            Check(!text.Contains("PRIVATE") && !File.Exists(Path.Combine(directory, "session.pending")));
+        }));
+        Run("Monitor tolerates unavailable log storage and records launch failures", () => WithHistoryDirectory(directory =>
+        {
+            var blocked = Path.Combine(directory, "blocked"); File.WriteAllText(blocked, "file");
+            var run = Task.Run(() => CrashMonitor.Run(Application.ExecutablePath, "--monitor-probe clean", blocked, 50));
+            Check(run.Wait(10000)); Equal(0, run.Result);
+            Equal(1, CrashMonitor.Run(Path.Combine(directory, "missing.exe"), "", directory));
+            Check(File.ReadAllText(Path.Combine(directory, "current.log")).Contains("monitor.failed"));
+        }));
     }
+
+    private static int MonitorProbe(string mode, string session)
+    {
+        using var pulse = EventWaitHandle.OpenExisting(CrashMonitor.EventName(session, "pulse"));
+        using var completed = EventWaitHandle.OpenExisting(CrashMonitor.EventName(session, "completed"));
+        for (int i = 0; i < 30; i++)
+        {
+            if (mode != "stalled") pulse.Set();
+            Thread.Sleep(10);
+        }
+        if (mode == "terminate")
+        {
+            using var process = Process.GetCurrentProcess();
+            TerminateProcess(process.Handle, 0xC0000005);
+            return 99;
+        }
+        if (mode == "abrupt-zero") Environment.Exit(0);
+        completed.Set();
+        return 0;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateProcess(IntPtr process, uint exitCode);
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowPrivateDiagnostic() => throw new InvalidOperationException("PRIVATE Bearer C:\\Users\\PRIVATE\\auth.json");
@@ -89,7 +147,7 @@ internal static partial class Program
         DiagnosticLog.Current = new DiagnosticLog(directory);
         CodexTray.Program.InstallExceptionHandlers();
         using var context = new ApplicationContext();
-        using var timer = new Timer { Interval = 50 };
+        using var timer = new System.Windows.Forms.Timer { Interval = 50 };
         int ticks = 0;
         timer.Tick += (_, __) =>
         {

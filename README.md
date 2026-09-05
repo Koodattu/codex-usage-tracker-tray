@@ -38,12 +38,13 @@ Local files are stored under `%LOCALAPPDATA%\CodexTray`:
 - `alerts.json` — notification deduplication and last observed allowance, created when alerts are enabled; account/pool keys are hashed.
 - `history/<hashed-account>/YYYY-MM-DD.jsonl` — timestamps and remaining percentages, recorded for each usage pool. History survives restarts and covers the last 30 days.
 - `logs/current.log`, `previous.log`, `older.log` — local diagnostics, capped at 256 KiB each. Open them from **About → Open logs** or the tray menu.
+- `logs/monitor/` — separate exit and health logs, also capped at three 256 KiB files, plus a small unfinished-session marker.
 
 History starts when the app records usage; it cannot recover earlier activity. Daily files use UTC dates and retain the partial boundary day. Saved history loads after a successful account check.
 
 No telemetry, API keys, credentials, conversations, or raw account responses are saved by the tracker. History is ordinary local text, not encrypted. Codex handles its own authentication.
 
-If the app exits unexpectedly, keep the log files before restarting repeatedly. They record startup/shutdown, refresh stages, and exception types and stack frames, without exception messages or source file paths. Logging is automatic and local; nothing is uploaded. A forced termination or power loss may leave only the last completed operation.
+If the app exits unexpectedly, keep both log folders. They record startup/shutdown, refresh stages, and exception types and stack frames, without exception messages or source file paths. A second, hidden instance of the same EXE monitors the tray process, recording its exit code and whether shutdown completed. Every 30 seconds it records UI heartbeat, memory, and handle counts to help investigate hangs and resource leaks. It makes no network requests and exits when the tray process exits. Logging is automatic and local; nothing is uploaded. Memory dumps are not collected because they can contain credentials. If both processes are killed or power is lost, the next launch records an unfinished session; an exit code alone cannot identify who terminated a process.
 
 ## Build
 

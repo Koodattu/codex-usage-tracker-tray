@@ -15,6 +15,7 @@ internal sealed class DiagnosticLog
     private readonly string directory;
     private readonly Stopwatch uptime = Stopwatch.StartNew();
     private readonly string version = typeof(DiagnosticLog).Assembly.GetName().Version!.ToString();
+    private readonly string build = typeof(DiagnosticLog).Module.ModuleVersionId.ToString("N");
     private readonly int processId;
     public static DiagnosticLog? Current { get; set; }
     public static string DirectoryPath => Path.Combine(Settings.DirectoryPath, "logs");
@@ -35,7 +36,7 @@ internal sealed class DiagnosticLog
             {
                 var text = new StringBuilder();
                 text.Append(DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture))
-                    .Append(" version=").Append(version).Append(" pid=").Append(processId)
+                    .Append(" version=").Append(version).Append(" build=").Append(build).Append(" pid=").Append(processId)
                     .Append(" uptime_s=").Append((long)uptime.Elapsed.TotalSeconds)
                     .Append(" event=").Append(eventName).AppendLine();
                 int remaining = 8;

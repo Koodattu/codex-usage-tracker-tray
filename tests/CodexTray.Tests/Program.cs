@@ -20,6 +20,7 @@ internal static partial class Program
     {
         if (args.FirstOrDefault() == "app-server") return FakeServer(args);
         if (args.FirstOrDefault() == "--diagnostic-child") return DiagnosticChild(args[1], args[2]);
+        if (args.FirstOrDefault() == "--monitor-probe") return MonitorProbe(args[1], args[2]);
         try
         {
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
@@ -16,6 +17,21 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length < 2 || args[0] != "--monitored")
+        {
+            using var monitorInstance = new Mutex(true, @"Local\CodexTray.Monitor.1", out var firstMonitor);
+            if (!firstMonitor) return;
+            Environment.ExitCode = CrashMonitor.Run(Application.ExecutablePath,
+                args.Contains("--background") ? "--monitored --background" : "--monitored",
+                Path.Combine(DiagnosticLog.DirectoryPath, "monitor"));
+            return;
+        }
+        // Only the monitor supplies an existing session; arbitrary command-line values cannot create one.
+        if (!Guid.TryParseExact(args[args.Length - 1], "N", out var session)) return;
+        if (!EventWaitHandle.TryOpenExisting(CrashMonitor.EventName(session.ToString("N"), "pulse"), out var pulse)) return;
+        using var uiPulse = pulse;
+        if (!EventWaitHandle.TryOpenExisting(CrashMonitor.EventName(session.ToString("N"), "completed"), out var completed)) return;
+        using var shutdownCompleted = completed;
         using var instance = new Mutex(true, @"Local\CodexTray.1", out var first);
         if (!first) return;
         DiagnosticLog.Current = new DiagnosticLog(DiagnosticLog.DirectoryPath);
@@ -25,6 +41,9 @@ internal static class Program
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            using var heartbeat = new System.Windows.Forms.Timer { Interval = 5000 };
+            heartbeat.Tick += (_, __) => uiPulse.Set();
+            heartbeat.Start();
             using var application = new TrayApplication(args.Contains("--background"));
             Application.Run(application);
         }
@@ -37,6 +56,7 @@ internal static class Program
         finally
         {
             DiagnosticLog.Current.Write(fatalError ? "app.stopped_after_error" : "app.stopped");
+            shutdownCompleted.Set();
             instance.ReleaseMutex();
         }
     }
