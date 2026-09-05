@@ -21,6 +21,7 @@ internal static class Program
         if (args.FirstOrDefault() == "app-server") return FakeServer(args);
         try
         {
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
             if (args.FirstOrDefault() == "--live")
             {
                 var executable = args.Length > 1 ? args[1] : WindowsIntegration.FindCodex(null);
@@ -285,7 +286,7 @@ internal static class Program
             Console.WriteLine($"PASS: {passed} checks.");
             return 0;
         }
-        catch (Exception ex) { Console.Error.WriteLine(ex.GetType().Name + ": " + ex.Message); return 1; }
+        catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
     }
 
     private static int FakeServer(string[] args)

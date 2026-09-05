@@ -41,6 +41,7 @@ jobs:
         with:
           dotnet-version: 9.0.304
       - name: Build, test, and package
+        timeout-minutes: 3
         shell: pwsh
         run: ./build.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
