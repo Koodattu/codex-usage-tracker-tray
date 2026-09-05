@@ -50,7 +50,7 @@ internal sealed class ResetCredit
     {
         var expiry = !ExpiryKnown ? "Expiry unavailable" : !ExpiresAt.HasValue ? "No expiry"
             : ExpiresAt.Value <= now ? "Expiry passed · awaiting refresh"
-            : $"Expires {ExpiresAt.Value.LocalDateTime:ddd d MMM yyyy, HH:mm}";
+            : $"Expires {ExpiresAt.Value.LocalDateTime:d MMM yyyy, HH:mm} ({Theme.Countdown(ExpiresAt.Value, now)})";
         return $"Reset {index} · {expiry}";
     }
 }
@@ -276,6 +276,33 @@ internal sealed class UsageHistory
     }
 
     public IEnumerable<HistoryPoint> InRange(DateTimeOffset now, int days) => Points.Where(p => p.Time >= now.AddDays(-days) && p.Time <= now);
+
+    public string WeeklyUsageSummary(DateTimeOffset now)
+    {
+        const string label = "Weekly used (24h): ";
+        HistoryPoint? previous = null, first = null, last = null;
+        double used = 0;
+        int pairs = 0;
+        bool partial = false;
+        foreach (var point in InRange(now, 1))
+        {
+            if (!point.Weekly.HasValue) { previous = null; partial = true; continue; }
+            if (first == null) first = point;
+            if (previous != null)
+            {
+                var decrease = previous.Weekly!.Value - point.Weekly.Value;
+                // An increase can hide consumption around a reset; never subtract it from usage.
+                used += Math.Max(0, decrease);
+                partial |= decrease < 0 || point.Time - previous.Time > TimeSpan.FromMinutes(15);
+                pairs++;
+            }
+            previous = last = point;
+        }
+        if (pairs == 0) return label + "collecting history";
+        partial |= first!.Time > now.AddDays(-1).AddMinutes(15) || last!.Time < now.AddMinutes(-15);
+        return label + $"~{used:0.#}%" + (partial ? " · partial history" : "");
+    }
+
     public void Clear()
     {
         pools.Clear(); Points = new List<HistoryPoint>(); accountKey = null;

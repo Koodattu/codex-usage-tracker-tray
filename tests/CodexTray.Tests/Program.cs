@@ -128,6 +128,20 @@ internal static partial class Program
             });
             Run("Invalid timestamps are unavailable", () =>
                 Check(Parse("{\"rateLimits\":{\"primary\":{\"usedPercent\":50,\"windowDurationMins\":300,\"resetsAt\":9999999999999}}}").FiveHour!.ResetsAt == null));
+            Run("Banked expiry countdowns advance without changing the recorded expiry", () =>
+            {
+                var expiry = Now.AddDays(2).AddHours(3);
+                var credit = new ResetCredit { ExpiresAt = expiry };
+                var date = expiry.LocalDateTime.ToString("d MMM yyyy, HH:mm");
+                Check(credit.Display(1, Now).Contains(date));
+                Check(credit.Display(1, Now).EndsWith("(2d 3h)"));
+                Check(credit.Display(1, Now.AddHours(4)).EndsWith("(1d 23h)"));
+                Check(credit.Display(1, expiry.AddSeconds(-30)).EndsWith("(<1m)"));
+                Check(credit.Display(1, expiry).Contains("Expiry passed"));
+                Equal(expiry, credit.ExpiresAt!.Value);
+                Check(new ResetCredit().Display(1, Now).Contains("No expiry"));
+                Check(new ResetCredit { ExpiryKnown = false }.Display(1, Now).Contains("Expiry unavailable"));
+            });
             Run("Passing a reset never manufactures fresh quota", () =>
             {
                 var s = Parse("{\"rateLimits\":{\"primary\":{\"usedPercent\":80,\"windowDurationMins\":300,\"resetsAt\":1}}}");
@@ -306,6 +320,7 @@ internal static partial class Program
                 }
             });
             Run("Popup renders live, empty and stale layouts at multiple sizes", RenderPreviews);
+            ChartHoverChecks();
             Run("Repeated layout retains the font cached by native controls", () =>
             {
                 using var control = new RadioButton();

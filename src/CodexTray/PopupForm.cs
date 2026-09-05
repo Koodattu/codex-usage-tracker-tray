@@ -8,6 +8,8 @@ namespace CodexTray;
 
 internal sealed class PopupForm : Form
 {
+    private static readonly RectangleF ChartBounds = new RectangleF(49, 269, 365, 91);
+    internal HistoryPoint? HoveredChartPoint { get; private set; }
     private readonly Button refresh = MakeButton("Refresh", true);
     private readonly Button desktop = MakeButton("Open Codex", false);
     private readonly Button close = MakeButton("×", false);
@@ -96,8 +98,9 @@ internal sealed class PopupForm : Form
         refresh.Text = busy ? "Refreshing…" : "Refresh";
         refresh.Enabled = canRefresh && !busy;
         AccessibleDescription = (value?.FiveHour == null ? "" : $"5-hour remaining: {Percent(value.FiveHour)}. ")
-            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. ") + message + ". " + QuotaPacing.Describe(value, DateTimeOffset.UtcNow, error);
+            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. " + history.WeeklyUsageSummary(DateTimeOffset.UtcNow) + ". ") + message + ". " + QuotaPacing.Describe(value, DateTimeOffset.UtcNow, error);
         UpdateResetList();
+        if (HoveredChartPoint != null && !history.Points.Contains(HoveredChartPoint)) ClearChartHover();
         Invalidate();
     }
 
@@ -105,6 +108,7 @@ internal sealed class PopupForm : Form
     {
         if (ChartDays == days) return;
         ChartDays = days;
+        ClearChartHover();
         UpdateRangeButtons();
         ChartRangeSelected?.Invoke(days);
         Invalidate();
@@ -163,7 +167,52 @@ internal sealed class PopupForm : Form
         if (keyData == Keys.Escape) { Hide(); return true; }
         return base.ProcessCmdKey(ref msg, keyData);
     }
-    protected override void OnResize(EventArgs e) { base.OnResize(e); LayoutButtons(); }
+    protected override void OnResize(EventArgs e) { base.OnResize(e); ClearChartHover(); LayoutButtons(); }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        var point = ChartPointAt(e.Location, DateTimeOffset.UtcNow);
+        if (ReferenceEquals(point, HoveredChartPoint)) return;
+        HoveredChartPoint = point;
+        Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); ClearChartHover(); }
+    protected override void OnVisibleChanged(EventArgs e)
+    {
+        base.OnVisibleChanged(e);
+        if (!Visible) ClearChartHover();
+    }
+
+    private void ClearChartHover()
+    {
+        if (HoveredChartPoint == null) return;
+        HoveredChartPoint = null;
+        Invalidate();
+    }
+
+    internal HistoryPoint? ChartPointAt(Point location, DateTimeOffset now)
+    {
+        if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return null;
+        var logical = new PointF(location.X * 440f / ClientSize.Width, location.Y * 636f / ClientSize.Height);
+        if (!ChartBounds.Contains(logical)) return null;
+        HistoryPoint? nearest = null;
+        // Snap to a recorded sample near the pointer; do not invent values across history gaps.
+        float distance = 12;
+        foreach (var point in history.InRange(now, ChartDays))
+        {
+            if (!(snapshot?.FiveHour != null && point.FiveHour.HasValue) && !(snapshot?.Weekly != null && point.Weekly.HasValue)) continue;
+            var candidate = Math.Abs(ChartX(point, now) - logical.X);
+            if (candidate > distance) continue;
+            distance = candidate;
+            nearest = point;
+        }
+        return nearest;
+    }
+
+    private float ChartX(HistoryPoint point, DateTimeOffset now) =>
+        ChartBounds.Left + (float)((point.Time - now.AddDays(-ChartDays)).TotalDays / ChartDays) * ChartBounds.Width;
     private void LayoutButtons()
     {
         if (refresh == null) return;
@@ -225,6 +274,8 @@ internal sealed class PopupForm : Form
         }
         Theme.Label(g, "Remaining over time", 14, Theme.Text, new RectangleF(24, 232, 230, 24), FontStyle.Bold);
         Theme.Label(g, QuotaPacing.Describe(snapshot, now, failed), 11, Theme.Muted, new RectangleF(24, 215, 392, 17));
+        if (snapshot?.Weekly != null)
+            Theme.Label(g, history.WeeklyUsageSummary(now), 10, Theme.Muted, new RectangleF(49, 253, 365, 15));
         DrawChart(g, now);
 
         Theme.RoundRect(g, Theme.Card, new RectangleF(24, 392, 392, 118), 12);
@@ -256,12 +307,14 @@ internal sealed class PopupForm : Form
             g.FillRectangle(progress, x + 16, 176, (float)((width - 32) * quota.Remaining / 100), 5);
         }
         var reset = quota == null ? "Not provided by Codex" : quota.ResetPending(now) ? "Reset due · awaiting refresh" : quota.ResetsAt.HasValue ? "Resets in " + Theme.Countdown(quota.ResetsAt.Value, now) : "Reset time unavailable";
-        Theme.Label(g, reset, 11, Theme.Muted, new RectangleF(x + 16, 189, width - 32, 20));
+        var countdown = quota?.ResetsAt.HasValue == true && !quota.ResetPending(now);
+        Theme.Label(g, reset, countdown ? 15 : 11, countdown ? Theme.Text : Theme.Muted,
+            new RectangleF(x + 16, 187, width - 32, 25), countdown ? FontStyle.Bold : FontStyle.Regular);
     }
 
     private void DrawChart(Graphics g, DateTimeOffset now)
     {
-        const float left = 49, top = 269, width = 365, height = 91;
+        float left = ChartBounds.Left, top = ChartBounds.Top, width = ChartBounds.Width, height = ChartBounds.Height;
         using var grid = new Pen(Theme.Line);
         foreach (var percent in new[] { 100, 50, 0 })
         {
@@ -273,22 +326,61 @@ internal sealed class PopupForm : Form
         Theme.Label(g, "Now", 9, Theme.Muted, new RectangleF(left + width - 40, 365, 40, 16), alignment: StringAlignment.Far);
         if (snapshot?.FiveHour != null)
         {
-            DrawSeries(g, now, p => p.FiveHour, Theme.Mint, left, top, width, height);
+            DrawSeries(g, now, p => p.FiveHour, Theme.Mint, top, height);
             Theme.Label(g, "● 5h", 10, Theme.Mint, new RectangleF(166, 365, 48, 18));
         }
         if (snapshot?.Weekly != null)
         {
-            DrawSeries(g, now, p => p.Weekly, Theme.Violet, left, top, width, height);
+            DrawSeries(g, now, p => p.Weekly, Theme.Violet, top, height);
             Theme.Label(g, "● Weekly", 10, Theme.Violet, new RectangleF(snapshot.FiveHour == null ? 196 : 226, 365, 80, 18));
         }
-        if (history.InRange(now, ChartDays).Count(p => p.FiveHour.HasValue || p.Weekly.HasValue) < 2)
+        if (HoveredChartPoint == null && history.InRange(now, ChartDays).Count(p => p.FiveHour.HasValue || p.Weekly.HasValue) < 2)
         {
             Theme.RoundRect(g, Theme.Background, new RectangleF(87, 294, 280, 39), 6);
             Theme.Label(g, "More history will appear as usage is recorded", 12, Theme.Muted, new RectangleF(89, 304, 276, 24), alignment: StringAlignment.Center);
         }
+        DrawChartHover(g, now);
     }
 
-    private void DrawSeries(Graphics g, DateTimeOffset now, Func<HistoryPoint, double?> select, Color color, float left, float top, float width, float height)
+    private void DrawChartHover(Graphics g, DateTimeOffset now)
+    {
+        var point = HoveredChartPoint;
+        if (point == null || point.Time < now.AddDays(-ChartDays) || point.Time > now) return;
+        var five = snapshot?.FiveHour != null ? point.FiveHour : null;
+        var weekly = snapshot?.Weekly != null ? point.Weekly : null;
+        if (!five.HasValue && !weekly.HasValue) return;
+        var x = ChartX(point, now);
+        using var guide = new Pen(Theme.Muted, 1) { DashStyle = DashStyle.Dot };
+        g.DrawLine(guide, x, ChartBounds.Top, x, ChartBounds.Bottom);
+        void Marker(double? value, Color color)
+        {
+            if (!value.HasValue) return;
+            var y = ChartBounds.Top + (float)(100 - value.Value) * ChartBounds.Height / 100;
+            using var fill = new SolidBrush(color);
+            using var outline = new Pen(Theme.Background, 1.5f);
+            g.FillEllipse(fill, x - 4, y - 4, 8, 8);
+            g.DrawEllipse(outline, x - 4, y - 4, 8, 8);
+        }
+        Marker(five, Theme.Mint);
+        Marker(weekly, Theme.Violet);
+        const float width = 178;
+        var left = x + 12 + width <= ChartBounds.Right ? x + 12 : x - 12 - width;
+        var top = ChartBounds.Top + 4;
+        var height = five.HasValue && weekly.HasValue ? 72 : 53;
+        Theme.RoundRect(g, Theme.Line, new RectangleF(left, top, width, height), 6);
+        Theme.Label(g, "Recorded " + point.Time.LocalDateTime.ToString("dd MMM · HH:mm"), 11, Theme.Text, new RectangleF(left + 9, top + 7, width - 18, 17));
+        var row = top + 27;
+        void Value(double? value, string label, Color color)
+        {
+            if (!value.HasValue) return;
+            Theme.Label(g, $"{label}: {value.Value:0.#}% remaining", 12, color, new RectangleF(left + 9, row, width - 18, 19));
+            row += 19;
+        }
+        Value(five, "5h", Theme.Mint);
+        Value(weekly, "Weekly", Theme.Violet);
+    }
+
+    private void DrawSeries(Graphics g, DateTimeOffset now, Func<HistoryPoint, double?> select, Color color, float top, float height)
     {
         using var pen = new Pen(color, 1.8f);
         using var brush = new SolidBrush(color);
@@ -299,7 +391,7 @@ internal sealed class PopupForm : Form
         {
             var value = select(sample);
             if (!value.HasValue) { previous = null; continue; }
-            var point = new PointF(left + (float)((sample.Time - now.AddDays(-ChartDays)).TotalDays / ChartDays) * width, top + (float)(100 - value.Value) * height / 100);
+            var point = new PointF(ChartX(sample, now), top + (float)(100 - value.Value) * height / 100);
             if (previous.HasValue && sample.Time - previousTime <= TimeSpan.FromMinutes(15))
             {
                 // Steps represent observed values; gaps do not imply measured activity.

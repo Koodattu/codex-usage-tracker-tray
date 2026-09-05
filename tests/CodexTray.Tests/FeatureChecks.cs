@@ -10,6 +10,36 @@ internal static partial class Program
 {
     private static void FeatureChecks()
     {
+        Run("Weekly usage sums observed declines across a rolling day", () =>
+        {
+            var history = new UsageHistory();
+            for (int i = 0; i <= 288; i++)
+                history.Points.Add(new HistoryPoint { Time = Now.AddMinutes(-1440 + i * 5), Weekly = 90 - i / 24d });
+            Equal("Weekly used (24h): ~12%", history.WeeklyUsageSummary(Now));
+            Check(history.WeeklyUsageSummary(Now.AddHours(1)).EndsWith("partial history"));
+            history.SelectPool("codex_extra");
+            Equal("Weekly used (24h): collecting history", history.WeeklyUsageSummary(Now));
+        });
+        Run("Weekly usage marks gaps and resets as partial without subtracting replenishment", () =>
+        {
+            var history = new UsageHistory();
+            var values = new[] { 90d, 20d, 100d, 30d };
+            for (int i = 0; i < values.Length; i++)
+                history.Points.Add(new HistoryPoint { Time = Now.AddHours(-3 + i), Weekly = values[i] });
+            Equal("Weekly used (24h): ~140% · partial history", history.WeeklyUsageSummary(Now));
+        });
+        Run("Weekly usage ignores readings outside the day and needs comparable values", () =>
+        {
+            var history = new UsageHistory();
+            history.Points.Add(new HistoryPoint { Time = Now.AddHours(-25), Weekly = 100 });
+            history.Points.Add(new HistoryPoint { Time = Now.AddHours(-2), Weekly = 80 });
+            history.Points.Add(new HistoryPoint { Time = Now.AddHours(-1) });
+            history.Points.Add(new HistoryPoint { Time = Now, Weekly = 60 });
+            history.Points.Add(new HistoryPoint { Time = Now.AddHours(1), Weekly = 10 });
+            Equal("Weekly used (24h): collecting history", history.WeeklyUsageSummary(Now));
+            history.Points.RemoveAt(2);
+            Equal("Weekly used (24h): ~20% · partial history", history.WeeklyUsageSummary(Now));
+        });
         Run("Notifications default off and create no alert file", () => WithHistoryDirectory(directory =>
         {
             var settings = new Settings();
