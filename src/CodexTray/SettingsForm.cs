@@ -89,11 +89,7 @@ internal sealed class SettingsForm : Form
     {
         // Panels are positioned in device pixels; their child bounds use the same scale once.
         if (!(control is Panel))
-        {
-            var oldFont = control.Font;
-            control.Font = new Font("Segoe UI", 14 * scale, FontStyle.Regular, GraphicsUnit.Pixel);
-            if (oldFont.Unit == GraphicsUnit.Pixel) oldFont.Dispose();
-        }
+            Theme.SetFont(control, 14 * scale);
         control.Bounds = new Rectangle((int)(x * scale), (int)(y * scale), (int)(width * scale), (int)(height * scale));
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 
 namespace CodexTray;
 
@@ -17,6 +18,16 @@ internal static class Theme
     public static readonly Color Amber = Color.FromArgb(245, 188, 85);
     public static readonly Color Red = Color.FromArgb(246, 107, 115);
     public static Color Quota(double remaining) => remaining <= 20 ? Red : remaining <= 50 ? Amber : Mint;
+
+    public static void SetFont(Control control, float size)
+    {
+        var previous = control.Font;
+        var font = new Font("Segoe UI", size, FontStyle.Regular, GraphicsUnit.Pixel);
+        // Equal fonts do not invalidate WinForms' cached text layout, which retains the old font.
+        if (previous.Equals(font)) { font.Dispose(); return; }
+        control.Font = font;
+        if (previous.Unit == GraphicsUnit.Pixel && !ReferenceEquals(previous, Control.DefaultFont)) previous.Dispose();
+    }
 
     public static void Label(Graphics graphics, string text, float size, Color color, RectangleF bounds, FontStyle style = FontStyle.Regular, StringAlignment alignment = StringAlignment.Near)
     {

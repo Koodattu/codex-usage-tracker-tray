@@ -178,18 +178,10 @@ internal sealed class PopupForm : Form
         weekRange.Bounds = Scale(new Rectangle(316, 230, 46, 25), scale);
         monthRange.Bounds = Scale(new Rectangle(366, 230, 50, 25), scale);
         resetList.Bounds = Scale(new Rectangle(40, 432, 360, 69), scale);
-        var oldResetFont = resetList.Font;
-        resetList.Font = new Font("Segoe UI", 12 * scale, GraphicsUnit.Pixel);
-        if (oldResetFont.Unit == GraphicsUnit.Pixel) oldResetFont.Dispose();
-        var oldFont = poolSelector.Font;
-        poolSelector.Font = new Font("Segoe UI", 12 * scale, GraphicsUnit.Pixel);
-        if (!ReferenceEquals(oldFont, Control.DefaultFont)) oldFont.Dispose();
+        Theme.SetFont(resetList, 12 * scale);
+        Theme.SetFont(poolSelector, 12 * scale);
         foreach (var button in new[] { refresh, desktop, close, menuButton, settingsButton, dayRange, weekRange, monthRange })
-        {
-            var previous = button.Font;
-            button.Font = new Font("Segoe UI", (button == menuButton || button == settingsButton ? 20 : 13) * scale, FontStyle.Regular, GraphicsUnit.Pixel);
-            previous.Dispose();
-        }
+            Theme.SetFont(button, (button == menuButton || button == settingsButton ? 20 : 13) * scale);
     }
     private static Rectangle Scale(Rectangle r, float s) => new Rectangle((int)(r.X * s), (int)(r.Y * s), (int)(r.Width * s), (int)(r.Height * s));
     private static Button MakeButton(string text, bool primary)

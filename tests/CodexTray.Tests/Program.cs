@@ -283,6 +283,24 @@ internal static class Program
                 }
             });
             Run("Popup renders live, empty and stale layouts at multiple sizes", RenderPreviews);
+            Run("Repeated layout retains the font cached by native controls", () =>
+            {
+                using var control = new RadioButton();
+                Theme.SetFont(control, 14);
+                var font = control.Font;
+                Theme.SetFont(control, 14);
+                Check(ReferenceEquals(font, control.Font));
+                using var bitmap = new Bitmap(100, 30);
+                using var graphics = Graphics.FromImage(bitmap);
+                Check(graphics.MeasureString("Settings", font).Width > 0);
+                control.Font.Dispose();
+            });
+            Run("Popup and settings render with classic Windows controls", () =>
+            {
+                var original = Application.VisualStyleState;
+                try { Application.VisualStyleState = System.Windows.Forms.VisualStyles.VisualStyleState.NoneEnabled; RenderPreviews(); }
+                finally { Application.VisualStyleState = original; }
+            });
             Console.WriteLine($"PASS: {passed} checks.");
             return 0;
         }
