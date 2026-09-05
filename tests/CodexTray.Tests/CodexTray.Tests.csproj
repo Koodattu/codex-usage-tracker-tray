@@ -7,5 +7,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/CodexTray/CodexTray.csproj" />
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
 </Project>

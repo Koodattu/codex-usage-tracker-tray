@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using CodexTray;
 
-internal static class Program
+internal static partial class Program
 {
     private static int passed;
     private static readonly DateTimeOffset Now = new DateTimeOffset(2026, 9, 5, 12, 0, 0, TimeSpan.Zero);
@@ -22,6 +22,26 @@ internal static class Program
         try
         {
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            if (args.FirstOrDefault() == "--update-smoke")
+            {
+                using var updates = new ReleaseUpdates();
+                var result = updates.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
+                Console.WriteLine(result);
+                Check(result.Contains("latest") || result.Contains("available"));
+                return 0;
+            }
+            if (args.FirstOrDefault() == "--notification-smoke")
+            {
+                using var icon = new NotifyIcon { Icon = SystemIcons.Information, Visible = true };
+                bool shown = false;
+                icon.BalloonTipShown += (_, __) => shown = true;
+                icon.ShowBalloonTip(5000, "Codex Tray · test", "Test notification. Your alert preferences are unchanged.", ToolTipIcon.Info);
+                var watch = Stopwatch.StartNew();
+                while (!shown && watch.Elapsed < TimeSpan.FromSeconds(6)) { Application.DoEvents(); Thread.Sleep(20); }
+                Console.WriteLine("Windows reported the test notification shown: " + shown);
+                Check(shown);
+                return 0;
+            }
             if (args.FirstOrDefault() == "--live")
             {
                 var executable = args.Length > 1 ? args[1] : WindowsIntegration.FindCodex(null);
@@ -44,10 +64,10 @@ internal static class Program
                 SmokeDpi();
                 return 0;
             }
-            if (args.FirstOrDefault() == "--settings-smoke")
+            if (args.FirstOrDefault() == "--settings-smoke" || args.FirstOrDefault() == "--settings-update-smoke")
             {
                 Application.EnableVisualStyles();
-                Run("Settings is above its modal owner and closes through Cancel", SettingsModalRegression);
+                Run("Settings is above its modal owner and closes through Cancel", () => SettingsModalRegression(args[0] == "--settings-update-smoke"));
                 return 0;
             }
             Run("Selects Codex multi-bucket view ahead of legacy", () =>
@@ -222,6 +242,7 @@ internal static class Program
                 Check(SpinWait.SpinUntil(() => !TestProcesses().Except(before).Any(), 2000));
             });
             Environment.SetEnvironmentVariable("CODEX_TRAY_FAKE", null);
+            FeatureChecks();
             Application.EnableVisualStyles();
             Run("Single icon is the default and unavailable limits are never selected", () =>
             {
@@ -393,6 +414,21 @@ internal static class Program
         Application.DoEvents();
         Equal("rotate", dialog.IconVisibility); Equal(15, dialog.RotationSeconds);
         using (var bitmap = new Bitmap(660, 954)) { dialog.DrawToBitmap(bitmap, new Rectangle(0, 0, 660, 954)); bitmap.Save(Path.Combine(directory, "preview-settings-150.png")); }
+        dialog.Controls.OfType<Button>().Single(b => b.Text == "Notifications").PerformClick();
+        Check(!dialog.LowQuotaAlerts && !dialog.RestoredAlerts && !dialog.ExpiryAlerts);
+        dialog.Controls.OfType<CheckBox>().Single(b => b.Text == "Low allowance warnings").Checked = true;
+        var warning = dialog.Controls.OfType<NumericUpDown>().Single(c => c.AccessibleName == "Warning percentage remaining");
+        var critical = dialog.Controls.OfType<NumericUpDown>().Single(c => c.AccessibleName == "Critical percentage remaining");
+        Check(warning.Enabled && critical.Enabled);
+        warning.Value = 8; Equal(7m, critical.Maximum); Equal(7, dialog.CriticalPercent);
+        Check(dialog.LowQuotaAlerts);
+        using (var bitmap = new Bitmap(660, 954)) { dialog.DrawToBitmap(bitmap, new Rectangle(0, 0, 660, 954)); bitmap.Save(Path.Combine(directory, "preview-alerts-150.png")); }
+        dialog.Controls.OfType<Button>().Single(b => b.Text == "About").PerformClick();
+        bool openedReleases = false;
+        dialog.ReleasesRequested += (_, __) => openedReleases = true;
+        dialog.Controls.OfType<Button>().Single(b => b.Text == "Open Releases").PerformClick();
+        Check(openedReleases);
+        using (var bitmap = new Bitmap(660, 954)) { dialog.DrawToBitmap(bitmap, new Rectangle(0, 0, 660, 954)); bitmap.Save(Path.Combine(directory, "preview-about-150.png")); }
     }
 
     private static void RenderIconSheet()
@@ -437,17 +473,28 @@ internal static class Program
         Console.WriteLine($"Tray DPI {DpiLayout.TrayDpi}: icon {DpiLayout.TrayIconSize}px.");
     }
 
-    private static void SettingsModalRegression()
+    private static void SettingsModalRegression(bool pendingUpdate = false)
     {
         using var popup = new PopupForm(new UsageHistory()) { KeepOpen = true };
         popup.ShowNearTray();
         Application.DoEvents();
-        using var dialog = new SettingsForm(new Settings(), false);
+        using var updates = new ReleaseUpdates(new SlowUpdateHandler());
+        using var dialog = new SettingsForm(new Settings(), false, updates);
+        bool requestStarted = false;
         bool visible = false, onTop = false, ownerDisabled = false, coversPopup = false;
         string observation = "Dialog timer did not run.";
         using var timer = new System.Windows.Forms.Timer { Interval = 250 };
         timer.Tick += (_, __) =>
         {
+            if (pendingUpdate && !requestStarted)
+            {
+                dialog.ShowAbout();
+                var button = dialog.Controls.OfType<Button>().Single(b => b.Text == "Check for updates");
+                button.PerformClick();
+                Check(!button.Enabled);
+                requestStarted = true;
+                return;
+            }
             timer.Stop();
             visible = dialog.Visible;
             ownerDisabled = !IsWindowEnabled(popup.Handle);
@@ -464,6 +511,7 @@ internal static class Program
         Equal(DialogResult.Cancel, result);
         Check(visible && onTop && ownerDisabled && coversPopup);
         Check(IsWindowEnabled(popup.Handle));
+        if (pendingUpdate) Check(requestStarted);
     }
 
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(Point point);

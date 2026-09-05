@@ -62,6 +62,16 @@ Example history row (synthetic):
 
 Versions before 1.2 kept chart history only in memory. That older history cannot be recovered; persistent recording starts with version 1.2.
 
+## Notifications, pacing, and updates
+
+All three notification switches default to off, including for existing settings files. Low-allowance warnings use adjustable remaining-percentage thresholds (20% and 10% initially). Allowance-restored alerts require a fresh positive observation after an observed zero; reaching a reset timestamp alone never triggers one. Allowance alerts follow the selected pool and require an identified account and a future reset timestamp. Expiry reminders use reported available credits and fire on a successful refresh within 24 hours of expiry; matching expiry times are grouped. Pausing refresh also pauses these checks. No extra Codex requests are made for alerts.
+
+`%LOCALAPPDATA%\CodexTray\alerts.json` stores hashed notification/account/pool keys, timestamps, and last observed remaining percentages. Alert records are retained for 30 days and saved before attempting to show a Windows notification, preventing repeated attempts after a restart. Windows may suppress delivery through its notification settings or Do not disturb. If alert state cannot be read or written, alerts are suppressed and the popup reports the problem. For a damaged alert file, quit the app and remove only `alerts.json` before restarting; this resets deduplication without removing history or settings.
+
+The weekly daily budget divides remaining percentage by fractional days to the reported reset, rounded down to one decimal place. It describes an even-use budget rather than predicting how long future tasks will take. Within the final 24 hours it shows remaining allowance instead of extrapolating a large daily figure. It is unavailable on failed, paused, stale, missing-reset, or reset-pending readings.
+
+About shows the installed assembly version. Check for updates makes one unauthenticated HTTPS GET to this repository's GitHub latest-release endpoint, with a ten-second timeout and a one-minute cache. GitHub rate-limit errors pause checks for an hour. Opening About does not check automatically. Draft, prerelease, or malformed version metadata is rejected. Open Releases always opens this repository's fixed HTTPS release page; response-provided download URLs are not executed. Nothing downloads or replaces the EXE in the background. Reset credits remain strictly read-only: there is no redemption action or API request.
+
 ## Windows integration
 
 CLI detection checks versioned app-managed runtimes (newest file first), the standalone installation, PATH, and common npm native-binary locations. **Setup → Choose Codex CLI executable…** handles custom installations; select the command-line binary, not the desktop GUI or an npm `.cmd` launcher.
@@ -94,6 +104,8 @@ Optional read-only integration checks, run as the Windows user signed into Codex
 `CodexTray.Tests.exe --ui-smoke` briefly shows sample-data popups on each connected monitor and verifies native DPI, popup bounds, and tray image size. It makes no usage requests. This was checked on the development machine's 144-DPI monitor and two 96-DPI monitors; the 144-DPI check reproduces the legacy WinForms `DeviceDpi = 96` condition that the native sizing corrects.
 
 `CodexTray.Tests.exe --settings-smoke` verifies that the modal settings dialog appears above the always-on-top usage popup, closes through Cancel, and restores the popup's input. It opens temporary windows and closes them automatically without usage requests or preference changes.
+
+`--settings-update-smoke` repeats the modal check while a simulated update request is pending. `--notification-smoke` shows one labeled test notification without changing preferences. `--update-smoke` makes one real read-only GitHub update check. The regular suite covers alert defaults, persistent deduplication, restoration, expiry grouping, storage failures, pacing, release metadata, cancellation, and all three settings tabs using synthetic data.
 
 The app-server interface can evolve. Tested against locally installed Codex CLI 0.145.0 and app-managed 0.153.4. Store activation discovery and popup positioning across different monitor DPIs were checked on the development machine. Explorer restarts and the startup toggle should also be exercised on the target Windows setup before wider distribution. The executable is unsigned.
 

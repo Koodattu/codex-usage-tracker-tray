@@ -10,13 +10,19 @@ Download `CodexTray.exe` and run it. Requires Windows 10 1903+ or Windows 11 wit
 
 The app starts quietly in the tray. If the icon is hidden, look under the taskbar's **^** menu.
 
-- **Left click:** usage popup with reset countdowns, banked reset expiry times, and **24h / 7d / 30d** history.
+- **Left click:** usage popup with reset countdowns, banked reset expiry times, a weekly daily budget, and **24h / 7d / 30d** history.
 - **Right click** or **⋯:** menu, refresh controls, Start with Windows, Codex desktop, and the ChatGPT Microsoft Store page.
-- **⚙:** settings for numbers or rings, one or two icons, and automatic switching between limits.
+- **⚙:** Display, Notifications, and About tabs. Choose numbers or rings, one or two icons, and automatic switching between limits.
 
 Icons change from green to amber to red as allowance runs low. Limits your account does not report are hidden. Separate Codex usage pools stay separate. The popup scales with Windows display settings.
 
+Notifications are **off by default**. Enable low-allowance warnings (20% and 10%, adjustable), allowance-restored alerts, or a reminder when a banked reset expires within 24 hours. Allowance alerts follow the selected pool and do not repeat for the same threshold/reset window after restarting. Windows notification settings may hide alerts.
+
+The daily budget divides remaining weekly allowance by the time until reset; it is an even-use budget, not a consumption prediction. Below one day, the popup shows the remaining allowance instead. Stale readings have no budget estimate.
+
 To update, quit the tray app, replace the EXE, and run it again. Preferences and history are preserved. Releases are currently unsigned, so Windows may show a publisher warning.
+
+**About → Check for updates** checks GitHub only when clicked. **Open Releases** opens the download page. There are no background update checks or automatic replacements.
 
 ## Data and refresh
 
@@ -25,6 +31,7 @@ Usage is read through the installed Codex CLI about every five minutes, with thr
 Local files are stored under `%LOCALAPPDATA%\CodexTray`:
 
 - `settings.json` — preferences.
+- `alerts.json` — notification deduplication and last observed allowance, created when alerts are enabled; account/pool keys are hashed.
 - `history/<hashed-account>/YYYY-MM-DD.jsonl` — timestamps and remaining percentages, recorded for each usage pool. History survives restarts and covers the last 30 days.
 
 History starts when the app records usage; it cannot recover earlier activity. Daily files use UTC dates and retain the partial boundary day. Saved history loads after a successful account check.

@@ -96,7 +96,7 @@ internal sealed class PopupForm : Form
         refresh.Text = busy ? "Refreshing…" : "Refresh";
         refresh.Enabled = canRefresh && !busy;
         AccessibleDescription = (value?.FiveHour == null ? "" : $"5-hour remaining: {Percent(value.FiveHour)}. ")
-            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. ") + message;
+            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. ") + message + ". " + QuotaPacing.Describe(value, DateTimeOffset.UtcNow, error);
         UpdateResetList();
         Invalidate();
     }
@@ -224,6 +224,7 @@ internal sealed class PopupForm : Form
             Theme.Label(g, "Available limits will appear here.", 12, Theme.Muted, new RectangleF(40, 174, 360, 24));
         }
         Theme.Label(g, "Remaining over time", 14, Theme.Text, new RectangleF(24, 232, 230, 24), FontStyle.Bold);
+        Theme.Label(g, QuotaPacing.Describe(snapshot, now, failed), 11, Theme.Muted, new RectangleF(24, 215, 392, 17));
         DrawChart(g, now);
 
         Theme.RoundRect(g, Theme.Card, new RectangleF(24, 392, 392, 118), 12);

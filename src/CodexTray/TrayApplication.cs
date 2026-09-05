@@ -16,6 +16,8 @@ internal sealed class TrayApplication : ApplicationContext
     private readonly UsageHistory history = new UsageHistory(new HistoryStore(Path.Combine(Settings.DirectoryPath, "history")));
     private readonly RefreshPolicy policy = new RefreshPolicy();
     private readonly CodexClient client = new CodexClient();
+    private readonly QuotaNotifications notifications = new QuotaNotifications(Path.Combine(Settings.DirectoryPath, "alerts.json"));
+    private readonly ReleaseUpdates updates = new ReleaseUpdates();
     private readonly CancellationTokenSource lifetime = new CancellationTokenSource();
     private readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer { Interval = 15000 };
     private readonly NotifyIcon primaryIcon = new NotifyIcon();
@@ -100,7 +102,9 @@ internal sealed class TrayApplication : ApplicationContext
             if (exiting) return;
             success = true;
             failed = false;
-            message = history.Warning ?? (value.FiveHour == null && value.Weekly == null ? "Codex did not provide 5-hour or weekly limits." : "Connected to Codex");
+            var alert = notifications.Evaluate(value, settings, DateTimeOffset.UtcNow);
+            if (alert != null) Notify(alert);
+            message = history.Warning ?? notifications.Warning ?? (value.FiveHour == null && value.Weekly == null ? "Codex did not provide 5-hour or weekly limits." : "Connected to Codex");
         }
         catch (OperationCanceledException) when (exiting) { return; }
         catch (UsageException ex)
@@ -188,6 +192,7 @@ internal sealed class TrayApplication : ApplicationContext
         AddChoice(visible, "Two icons · one for each limit", settings.IconVisibility == "both", () => SaveSetting(() => settings.IconVisibility = "both"));
         menu.Items.Add(visible);
         menu.Items.Add("Settings…", null, (_, __) => ShowSettings());
+        menu.Items.Add("About / Check for updates…", null, (_, __) => ShowSettings(true));
         menu.Items.Add(new ToolStripMenuItem("Pause automatic refresh", null, (_, __) => { paused = !paused; UpdateView(); }) { Checked = paused });
         try
         {
@@ -242,7 +247,7 @@ internal sealed class TrayApplication : ApplicationContext
         RunAction(settings.Save);
         UpdateView();
     }
-    private void ShowSettings()
+    private void ShowSettings(bool about = false)
     {
         menu.Close();
         popup.KeepOpen = true;
@@ -250,13 +255,20 @@ internal sealed class TrayApplication : ApplicationContext
         {
             bool? startup = null;
             RunAction(() => startup = WindowsIntegration.StartsWithWindows());
-            using var dialog = new SettingsForm(settings, startup);
+            using var dialog = new SettingsForm(settings, startup, updates);
+            dialog.ReleasesRequested += (_, __) => RunAction(() => Process.Start(new ProcessStartInfo(ReleaseUpdates.ReleasesUrl) { UseShellExecute = true }));
+            if (about) dialog.ShowAbout();
             if (dialog.ShowFor(popup) != DialogResult.OK) return;
             SaveSetting(() =>
             {
                 settings.DisplayMode = dialog.DisplayMode;
                 settings.IconVisibility = dialog.IconVisibility;
                 settings.RotationSeconds = dialog.RotationSeconds;
+                settings.LowQuotaAlerts = dialog.LowQuotaAlerts;
+                settings.RestoredAlerts = dialog.RestoredAlerts;
+                settings.ExpiryAlerts = dialog.ExpiryAlerts;
+                settings.WarningPercent = dialog.WarningPercent;
+                settings.CriticalPercent = dialog.CriticalPercent;
             });
             if (startup.HasValue && startup.Value != dialog.StartWithWindows)
                 RunAction(() => WindowsIntegration.SetStartWithWindows(dialog.StartWithWindows));
@@ -301,6 +313,7 @@ internal sealed class TrayApplication : ApplicationContext
             secondaryIcon.Dispose();
             menu.Dispose();
             popup.Dispose();
+            updates.Dispose();
             lifetime.Dispose();
         }
         base.Dispose(disposing);

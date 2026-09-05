@@ -4,6 +4,7 @@ dist/
 .env.*
 auth.json
 settings.json
+alerts.json
 history/
 *.jsonl
 *.pem
