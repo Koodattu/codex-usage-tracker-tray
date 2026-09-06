@@ -18,13 +18,13 @@ Icons change from green to amber to red as allowance runs low. Limits your accou
 
 Hover over the chart to highlight a nearby recorded reading and see its local time and remaining percentages. This works in all three history ranges without additional requests.
 
-Thin gray lines connect recorded readings across gaps in history; they do not represent measured usage during the gap.
+Bold dashed gray lines connect recorded readings across gaps in history; they do not represent measured usage during the gap.
 
 **Weekly used (24h)** estimates the percentage of weekly allowance consumed in the rolling last 24 hours for the selected pool. It adds recorded decreases; resets never subtract usage. Short history, gaps, or observed resets are marked **partial history**, since usage during unobserved intervals may be missing. This always covers 24 hours, regardless of the chart range.
 
 Notifications are **off by default**. Enable low-allowance warnings (20% and 10%, adjustable), allowance-restored alerts, or a reminder when a banked reset expires within 24 hours. Allowance alerts follow the selected pool and do not repeat for the same threshold/reset window after restarting. Windows notification settings may hide alerts.
 
-The daily budget divides remaining weekly allowance by the time until reset; it is an even-use budget, not a consumption prediction. Below one day, the popup shows the remaining allowance instead. Stale readings have no budget estimate.
+The daily budget divides remaining weekly allowance by the time until reset, including when less than one day remains; it is an even-use budget, not a consumption prediction. Stale readings have no budget estimate.
 
 To update, quit the tray app, replace the EXE, and run it again. Preferences and history are preserved. Releases are currently unsigned, so Windows may show a publisher warning.
 

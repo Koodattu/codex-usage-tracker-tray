@@ -424,7 +424,7 @@ internal sealed class PopupForm : Form
     private void DrawSeries(Graphics g, DateTimeOffset now, Func<HistoryPoint, double?> select, Color color, float top, float height)
     {
         using var pen = new Pen(color, 1.8f);
-        using var gapPen = new Pen(Color.FromArgb(140, Theme.Muted), 1);
+        using var gapPen = new Pen(Theme.Muted, 2) { DashStyle = DashStyle.Dash };
         using var brush = new SolidBrush(color);
         using var path = new GraphicsPath();
         PointF? previous = null;

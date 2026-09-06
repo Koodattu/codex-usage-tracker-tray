@@ -130,9 +130,13 @@ internal static partial class Program
             Check(QuotaPacing.Describe(sample, Now, true).Contains("unavailable"));
             Check(QuotaPacing.Describe(sample, Now.AddMinutes(11), false).Contains("unavailable"));
             sample.Weekly.ResetsAt = Now.AddHours(2);
-            Check(QuotaPacing.Describe(sample, Now, false).Contains("within 24h"));
+            Equal($"Until reset: ~{648d:0.0}% of weekly allowance/day", QuotaPacing.Describe(sample, Now, false));
+            Equal($"~{648d:0.0}%", QuotaPacing.Describe(sample, Now, false, true));
+            sample.Weekly.Remaining = 18; sample.Weekly.ResetsAt = Now.AddHours(19);
+            Equal($"~{22.7:0.0}%", QuotaPacing.Describe(sample, Now, false, true));
             sample.Weekly.ResetsAt = Now;
             Check(QuotaPacing.Describe(sample, Now, false).Contains("unavailable"));
+            Equal("Unavailable", QuotaPacing.Describe(sample, Now, false, true));
             sample.Weekly = null; Equal("", QuotaPacing.Describe(sample, Now, false));
         });
         Run("Update checks compare versions numerically and reject preview metadata", () =>
