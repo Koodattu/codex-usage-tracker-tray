@@ -424,25 +424,33 @@ internal sealed class PopupForm : Form
     private void DrawSeries(Graphics g, DateTimeOffset now, Func<HistoryPoint, double?> select, Color color, float top, float height)
     {
         using var pen = new Pen(color, 1.8f);
+        using var gapPen = new Pen(Color.FromArgb(140, Theme.Muted), 1);
         using var brush = new SolidBrush(color);
         using var path = new GraphicsPath();
         PointF? previous = null;
         DateTimeOffset previousTime = DateTimeOffset.MinValue;
+        bool gap = false;
         foreach (var sample in history.InRange(now, ChartDays))
         {
             var value = select(sample);
-            if (!value.HasValue) { previous = null; continue; }
+            if (!value.HasValue) { gap = true; continue; }
             var point = new PointF(ChartX(sample, now), top + (float)(100 - value.Value) * height / 100);
-            if (previous.HasValue && sample.Time - previousTime <= TimeSpan.FromMinutes(15))
+            if (previous.HasValue && !gap && sample.Time - previousTime <= TimeSpan.FromMinutes(15))
             {
-                // Steps represent observed values; gaps do not imply measured activity.
+                // Colored steps represent observed values; gray lines only bridge missing history.
                 var corner = new PointF(point.X, previous.Value.Y);
                 path.AddLine(previous.Value, corner);
                 path.AddLine(corner, point);
             }
-            else { path.StartFigure(); g.FillEllipse(brush, point.X - 2, point.Y - 2, 4, 4); }
+            else
+            {
+                if (previous.HasValue) g.DrawLine(gapPen, previous.Value, point);
+                path.StartFigure();
+                g.FillEllipse(brush, point.X - 2, point.Y - 2, 4, 4);
+            }
             previous = point;
             previousTime = sample.Time;
+            gap = false;
         }
         if (path.PointCount > 0) g.DrawPath(pen, path);
         if (previous.HasValue) g.FillEllipse(brush, previous.Value.X - 2.5f, previous.Value.Y - 2.5f, 5, 5);
