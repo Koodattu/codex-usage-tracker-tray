@@ -277,14 +277,15 @@ internal sealed class UsageHistory
 
     public IEnumerable<HistoryPoint> InRange(DateTimeOffset now, int days) => Points.Where(p => p.Time >= now.AddDays(-days) && p.Time <= now);
 
-    public string WeeklyUsageSummary(DateTimeOffset now, bool compact = false)
+    public string WeeklyUsageSummary(DateTimeOffset now, bool compact = false, bool dailyAverage = false)
     {
-        var label = compact ? "" : "Weekly used (24h): ";
+        var days = dailyAverage ? 7 : 1;
+        var label = compact ? "" : dailyAverage ? "Average weekly used per day (7d): " : "Weekly used (24h): ";
         HistoryPoint? previous = null, first = null, last = null;
         double used = 0;
         int pairs = 0;
         bool partial = false;
-        foreach (var point in InRange(now, 1))
+        foreach (var point in InRange(now, days))
         {
             if (!point.Weekly.HasValue) { previous = null; partial = true; continue; }
             if (first == null) first = point;
@@ -299,7 +300,13 @@ internal sealed class UsageHistory
             previous = last = point;
         }
         if (pairs == 0) return label + "collecting history";
-        partial |= first!.Time > now.AddDays(-1).AddMinutes(15) || last!.Time < now.AddMinutes(-15);
+        if (dailyAverage)
+        {
+            var elapsedDays = (last!.Time - first!.Time).TotalDays;
+            if (elapsedDays <= 0) return label + "collecting history";
+            used /= elapsedDays;
+        }
+        partial |= first!.Time > now.AddDays(-days).AddMinutes(15) || last!.Time < now.AddMinutes(-15);
         return label + $"~{used:0.#}%" + (partial ? " · partial history" : "");
     }
 

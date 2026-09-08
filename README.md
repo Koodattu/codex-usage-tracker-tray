@@ -10,7 +10,7 @@ Download `CodexTray.exe` and run it. Requires Windows 10 1903+ or Windows 11 wit
 
 The app starts quietly in the tray. If the icon is hidden, look under the taskbar's **^** menu.
 
-- **Left click:** usage popup with reset countdowns, banked reset expiry times, a weekly daily budget, and **24h / 7d / 30d** history.
+- **Left click:** usage popup with reset countdowns, banked reset expiry times, average daily usage, and **24h / 7d / 30d** history.
 - **Right click** or **⋯:** menu, refresh controls, Start with Windows, Codex desktop, and the ChatGPT Microsoft Store page.
 - **⚙:** Display, Notifications, and About tabs. Choose numbers or rings, one or two icons, and automatic switching between limits.
 
@@ -24,7 +24,7 @@ Bold dashed gray lines connect recorded readings across gaps in history; they do
 
 Notifications are **off by default**. Enable low-allowance warnings (20% and 10%, adjustable), allowance-restored alerts, or a reminder when a banked reset expires within 24 hours. Allowance alerts follow the selected pool and do not repeat for the same threshold/reset window after restarting. Windows notification settings may hide alerts.
 
-The daily budget divides remaining weekly allowance by the time until reset, including when less than one day remains; it is an even-use budget, not a consumption prediction. Stale readings have no budget estimate.
+**Avg. weekly used / day** adds observed decreases in weekly allowance over the last seven days and divides by the elapsed days between the first and last available readings. For example, a decline from 56% to 5% over 48 hours is 25.5% of the weekly allowance per day. It always uses a seven-day lookback, regardless of the chart range; shorter history uses only the recorded time span. Gaps, short history, old readings, or observed resets are marked **partial history** because unobserved usage may be missing. At least two comparable readings are needed.
 
 To update, quit the tray app, replace the EXE, and run it again. Preferences and history are preserved. Releases are currently unsigned, so Windows may show a publisher warning.
 

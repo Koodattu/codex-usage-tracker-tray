@@ -10,6 +10,30 @@ internal static partial class Program
 {
     private static void ChartHoverChecks()
     {
+        Run("Daily usage remains a seven-day average when the chart range changes", () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var history = new UsageHistory();
+            history.Points.Add(new HistoryPoint { Time = now.AddDays(-2), Weekly = 56 });
+            history.Points.Add(new HistoryPoint { Time = now.AddDays(-1), Weekly = 30 });
+            history.Points.Add(new HistoryPoint { Time = now, Weekly = 5 });
+            var snapshot = new UsageSnapshot { ReadAt = now, Weekly = new QuotaWindow { Remaining = 5, ResetsAt = now.AddMinutes(41) } };
+            using var form = new PopupForm(history) { Location = new Point(-20000, -20000), KeepOpen = true };
+            form.Show(); Application.DoEvents();
+            foreach (var range in new[] { "Past 24 hours", "Past 7 days", "Past 30 days" })
+            {
+                form.Controls.OfType<Button>().Single(b => b.AccessibleName == range).PerformClick();
+                form.UpdateUsage(snapshot, "Sample data", false, false, now.AddMinutes(5), true);
+                Check(form.AccessibleDescription.Contains($"Average weekly used per day (7d): ~{25.5:0.#}% · partial history"));
+            }
+            foreach (var scale in new[] { 1f, 1.5f, 2f })
+            {
+                form.ClientSize = new Size((int)(440 * scale), (int)(636 * scale));
+                using var bitmap = new Bitmap(form.Width, form.Height);
+                form.DrawToBitmap(bitmap, form.ClientRectangle);
+                bitmap.Save(Path.Combine(".artifacts", "preview-daily-usage-" + (int)(scale * 100) + ".png"));
+            }
+        });
         Run("Chart hover selects recorded samples at every range and display scale", () =>
         {
             foreach (var days in new[] { 1, 7, 30 })

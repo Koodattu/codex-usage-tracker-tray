@@ -100,7 +100,8 @@ internal sealed class PopupForm : Form
         refresh.Text = busy ? "Refreshing…" : "Refresh";
         refresh.Enabled = canRefresh && !busy;
         AccessibleDescription = (value?.FiveHour == null ? "" : $"5-hour remaining: {Percent(value.FiveHour)}. ")
-            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. " + history.WeeklyUsageSummary(DateTimeOffset.UtcNow) + ". ") + message + ". " + QuotaPacing.Describe(value, DateTimeOffset.UtcNow, error);
+            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. " + history.WeeklyUsageSummary(DateTimeOffset.UtcNow) + ". "
+                + history.WeeklyUsageSummary(DateTimeOffset.UtcNow, dailyAverage: true) + ". ") + message;
         UpdateResetList();
         if (HoveredChartPoint != null && !history.Points.Contains(HoveredChartPoint)) ClearChartHover();
         Invalidate();
@@ -306,9 +307,9 @@ internal sealed class PopupForm : Form
         if (snapshot?.Weekly != null)
         {
             Theme.Label(g, "Weekly used · last 24h", 10, Theme.Muted, new RectangleF(24, 250, 190, 16));
-            Theme.Label(g, "Weekly budget / day", 10, Theme.Muted, new RectangleF(226, 250, 190, 16), alignment: StringAlignment.Far);
+            Theme.Label(g, "Avg. weekly used / day", 10, Theme.Muted, new RectangleF(226, 250, 190, 16), alignment: StringAlignment.Far);
             Theme.Label(g, history.WeeklyUsageSummary(now, true), 13, Theme.Text, new RectangleF(24, 268, 200, 22));
-            Theme.Label(g, QuotaPacing.Describe(snapshot, now, failed, true), 15, Theme.Text, new RectangleF(226, 266, 190, 24), FontStyle.Bold, StringAlignment.Far);
+            Theme.Label(g, history.WeeklyUsageSummary(now, true, dailyAverage: true), 13, Theme.Text, new RectangleF(226, 268, 190, 22), alignment: StringAlignment.Far);
         }
         DrawChart(g, now);
 

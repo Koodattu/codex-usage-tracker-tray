@@ -121,23 +121,55 @@ internal static partial class Program
             alerts = new QuotaNotifications(Path.Combine(path, "blocked.json"));
             Check(alerts.Evaluate(AlertSample(5), settings, Now) == null); Check(alerts.Warning != null);
         }));
-        Run("Pacing uses fractional days and never projects from stale data", () =>
+        Run("Daily usage averages observed consumption over the available seven-day history", () =>
         {
-            var sample = AlertSample(54); sample.Weekly!.ResetsAt = Now.AddDays(3);
-            Check(QuotaPacing.Describe(sample, Now, false).Contains(18d.ToString("0.0")));
-            sample.Weekly.ResetsAt = Now.AddDays(1.5);
-            Check(QuotaPacing.Describe(sample, Now, false).Contains(36d.ToString("0.0")));
-            Check(QuotaPacing.Describe(sample, Now, true).Contains("unavailable"));
-            Check(QuotaPacing.Describe(sample, Now.AddMinutes(11), false).Contains("unavailable"));
-            sample.Weekly.ResetsAt = Now.AddHours(2);
-            Equal($"Until reset: ~{648d:0.0}% of weekly allowance/day", QuotaPacing.Describe(sample, Now, false));
-            Equal($"~{648d:0.0}%", QuotaPacing.Describe(sample, Now, false, true));
-            sample.Weekly.Remaining = 18; sample.Weekly.ResetsAt = Now.AddHours(19);
-            Equal($"~{22.7:0.0}%", QuotaPacing.Describe(sample, Now, false, true));
-            sample.Weekly.ResetsAt = Now;
-            Check(QuotaPacing.Describe(sample, Now, false).Contains("unavailable"));
-            Equal("Unavailable", QuotaPacing.Describe(sample, Now, false, true));
-            sample.Weekly = null; Equal("", QuotaPacing.Describe(sample, Now, false));
+            var history = new UsageHistory();
+            history.Points.Add(new HistoryPoint { Time = Now.AddDays(-2), Weekly = 56 });
+            history.Points.Add(new HistoryPoint { Time = Now.AddDays(-1), Weekly = 30 });
+            history.Points.Add(new HistoryPoint { Time = Now, Weekly = 5 });
+            Equal($"~{25.5:0.#}% · partial history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            Equal($"Average weekly used per day (7d): ~{25.5:0.#}% · partial history", history.WeeklyUsageSummary(Now, dailyAverage: true));
+            Equal("Weekly used (24h): ~25% · partial history", history.WeeklyUsageSummary(Now));
+            Equal(history.WeeklyUsageSummary(Now, dailyAverage: true), history.WeeklyUsageSummary(Now.AddHours(6), dailyAverage: true));
+            history.Points.Insert(0, new HistoryPoint { Time = Now.AddDays(-8), Weekly = 100 });
+            history.Points.Add(new HistoryPoint { Time = Now.AddMinutes(1), Weekly = 0 });
+            Equal($"~{25.5:0.#}% · partial history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            history.SelectPool("codex_extra");
+            Equal("collecting history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+        });
+        Run("Daily usage handles a full week, fractional days, and zero consumption", () =>
+        {
+            var history = new UsageHistory();
+            for (int i = 0; i <= 2016; i++)
+                history.Points.Add(new HistoryPoint { Time = Now.AddMinutes(-10080 + i * 5), Weekly = 90 - i / 288d * 10 });
+            Equal("~10%", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            history.Points.Clear();
+            history.Points.Add(new HistoryPoint { Time = Now.AddHours(-36), Weekly = 60 });
+            history.Points.Add(new HistoryPoint { Time = Now, Weekly = 10 });
+            Equal($"~{33.3:0.#}% · partial history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            history.Points[1].Weekly = 60;
+            Equal("~0% · partial history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+        });
+        Run("Daily usage does not subtract resets or bridge missing weekly readings", () =>
+        {
+            var history = new UsageHistory();
+            var values = new[] { 90d, 20d, 100d, 30d };
+            for (int i = 0; i < values.Length; i++)
+                history.Points.Add(new HistoryPoint { Time = Now.AddDays(-3 + i), Weekly = values[i] });
+            Equal($"~{46.7:0.#}% · partial history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            history.Points[1].Weekly = null;
+            Equal($"~{23.3:0.#}% · partial history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            history.Points[2].Weekly = null;
+            Equal("collecting history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+        });
+        Run("Daily usage needs comparable readings over a positive time span", () =>
+        {
+            var history = new UsageHistory();
+            Equal("collecting history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            history.Points.Add(new HistoryPoint { Time = Now, Weekly = 56 });
+            Equal("collecting history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
+            history.Points.Add(new HistoryPoint { Time = Now, Weekly = 5 });
+            Equal("collecting history", history.WeeklyUsageSummary(Now, true, dailyAverage: true));
         });
         Run("Update checks compare versions numerically and reject preview metadata", () =>
         {
