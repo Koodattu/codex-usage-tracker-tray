@@ -10,22 +10,23 @@ internal sealed class PopupForm : Form
 {
     private RectangleF ChartBounds => snapshot?.Weekly != null ? new RectangleF(49, 300, 365, 84) : new RectangleF(49, 252, 365, 132);
     internal HistoryPoint? HoveredChartPoint { get; private set; }
-    private readonly Button refresh = MakeButton("Refresh", true);
-    private readonly Button desktop = MakeButton("Open Codex", false);
-    private readonly Button close = MakeButton("×", false);
-    private readonly Button menuButton = MakeButton("⋯", false);
-    private readonly Button settingsButton = MakeButton("⚙", false);
-    private readonly Button dayRange = MakeButton("24h", false);
-    private readonly Button weekRange = MakeButton("7d", false);
-    private readonly Button monthRange = MakeButton("30d", false);
+    private readonly Button refresh = Theme.Button("Refresh", true);
+    private readonly Button desktop = Theme.Button("Open Codex");
+    private readonly Button close = Theme.Button("×");
+    private readonly Button menuButton = Theme.Button("⋯");
+    private readonly Button settingsButton = Theme.Button("⚙");
+    private readonly Button dayRange = Theme.Button("24h");
+    private readonly Button weekRange = Theme.Button("7d");
+    private readonly Button monthRange = Theme.Button("30d");
+    private readonly Button readings = Theme.Button("Readings…");
     private readonly ListBox resetList = new ListBox { BorderStyle = BorderStyle.None, BackColor = Theme.Card, ForeColor = Theme.Muted, IntegralHeight = false, DrawMode = DrawMode.OwnerDrawFixed, AccessibleName = "Banked reset expiry times" };
     private readonly ToolTip hints = new ToolTip();
     private readonly Label connectionStatus = new Label { Text = "Connecting to Codex…", AutoEllipsis = true, BackColor = Theme.Background, ForeColor = Theme.Muted, AccessibleName = "Connection status" };
-    private readonly Button poolSelector = MakeButton("Usage pool ▾", false);
+    private readonly Label freshness = new Label { BackColor = Theme.Background, ForeColor = Theme.Muted, AccessibleName = "Reading freshness", TextAlign = ContentAlignment.MiddleCenter };
+    private readonly Button poolSelector = Theme.Button("Usage pool ▾");
     private readonly DpiMenu poolMenu = new DpiMenu();
     private readonly UsageHistory history;
     private UsageSnapshot? snapshot;
-    private DateTimeOffset nextAttempt;
     private bool busy;
     private bool failed;
     public event EventHandler? RefreshRequested;
@@ -52,12 +53,15 @@ internal sealed class PopupForm : Form
         ForeColor = Theme.Text;
         DoubleBuffered = true;
         ClientSize = new Size(440, 636);
-        Controls.AddRange(new Control[] { refresh, desktop, close, poolSelector, menuButton, settingsButton, dayRange, weekRange, monthRange, resetList, connectionStatus });
+        Controls.AddRange(new Control[] { refresh, desktop, close, poolSelector, menuButton, settingsButton, dayRange, weekRange, monthRange, resetList, connectionStatus, freshness, readings });
         menuButton.AccessibleName = "Open menu";
         settingsButton.AccessibleName = "Settings";
         menuButton.TabIndex = 0; settingsButton.TabIndex = 1; close.TabIndex = 2;
         poolSelector.TabIndex = 3; dayRange.TabIndex = 4; weekRange.TabIndex = 5; monthRange.TabIndex = 6;
-        resetList.TabIndex = 7; refresh.TabIndex = 8; desktop.TabIndex = 9;
+        readings.TabIndex = 7; resetList.TabIndex = 8; refresh.TabIndex = 9; desktop.TabIndex = 10;
+        readings.AccessibleName = "View recorded readings";
+        readings.Click += (_, __) => ShowReadings();
+        hints.SetToolTip(readings, "Inspect or export recorded allowance. No usage request is made.");
         dayRange.AccessibleName = "Past 24 hours"; weekRange.AccessibleName = "Past 7 days"; monthRange.AccessibleName = "Past 30 days";
         dayRange.Click += (_, __) => SelectRange(1);
         weekRange.Click += (_, __) => SelectRange(7);
@@ -87,21 +91,30 @@ internal sealed class PopupForm : Form
         LayoutButtons();
     }
 
-    public void UpdateUsage(UsageSnapshot? value, string message, bool refreshing, bool error, DateTimeOffset next, bool canRefresh)
+    public void UpdateUsage(UsageSnapshot? value, string message, bool refreshing, bool error, DateTimeOffset next, bool canRefresh, DateTimeOffset? manualAllowedAt = null)
     {
+        var now = DateTimeOffset.UtcNow;
         snapshot = value;
-        connectionStatus.Text = message;
-        connectionStatus.ForeColor = error ? Theme.Amber : Theme.Muted;
+        var stale = value?.IsStale(now) == true;
+        connectionStatus.Text = !error && !refreshing && stale ? "Readings are over 10 minutes old. Waiting for an update." : message;
+        connectionStatus.ForeColor = error || stale ? Theme.Amber : Theme.Muted;
+        hints.SetToolTip(connectionStatus, connectionStatus.Text);
         busy = refreshing;
         failed = error;
-        nextAttempt = next;
         poolSelector.Text = (value?.Pools.FirstOrDefault(p => p.Id == value.PoolId)?.Name ?? "Usage pool") + " ▾";
         poolSelector.Visible = value != null && value.Pools.Count > 1;
-        refresh.Text = busy ? "Refreshing…" : "Refresh";
+        var retry = manualAllowedAt ?? (error ? next : DateTimeOffset.MinValue);
+        refresh.Text = busy ? "Refreshing…" : !canRefresh && retry > now ? (error ? "Retry in " : "Refresh in ") + Theme.Countdown(retry, now) : "Refresh";
         refresh.Enabled = canRefresh && !busy;
+        var readTime = value?.ReadAt.LocalDateTime;
+        var timing = readTime == null ? "" : (stale || error ? "Last read " : "Updated ")
+            + readTime.Value.ToString(readTime.Value.Date == now.LocalDateTime.Date ? "HH:mm" : "d MMM yyyy, HH:mm");
+        var nextCheck = !busy && next > now ? "Next check in " + Theme.Countdown(next, now) : "";
+        freshness.Text = timing + (timing.Length > 0 && nextCheck.Length > 0 ? " · " : "") + nextCheck;
         AccessibleDescription = (value?.FiveHour == null ? "" : $"5-hour remaining: {Percent(value.FiveHour)}. ")
-            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. " + history.WeeklyUsageSummary(DateTimeOffset.UtcNow) + ". "
-                + history.WeeklyUsageSummary(DateTimeOffset.UtcNow, dailyAverage: true) + ". ") + message;
+            + (value?.Weekly == null ? "" : $"Weekly remaining: {Percent(value.Weekly)}. " + history.WeeklyUsageSummary(now) + ". "
+                + history.WeeklyUsageSummary(now, dailyAverage: true) + ". ") + connectionStatus.Text + ". " + freshness.Text
+            + (value?.FiveHour?.ResetPending(now) == true || value?.Weekly?.ResetPending(now) == true ? ". Reset due; waiting for confirmed allowance." : "");
         UpdateResetList();
         if (HoveredChartPoint != null && !history.Points.Contains(HoveredChartPoint)) ClearChartHover();
         Invalidate();
@@ -115,6 +128,24 @@ internal sealed class PopupForm : Form
         UpdateRangeButtons();
         ChartRangeSelected?.Invoke(days);
         Invalidate();
+    }
+
+    private void ShowReadings()
+    {
+        var keepOpen = KeepOpen;
+        KeepOpen = true;
+        try
+        {
+            var pool = snapshot?.Pools.FirstOrDefault(p => p.Id == snapshot.PoolId);
+            using var dialog = new HistoryForm(new HistoryReadings(history, snapshot?.PoolId ?? "codex", DateTimeOffset.UtcNow), pool?.Name ?? "Codex", ChartDays);
+            dialog.ShowFor(this);
+            SelectRange(dialog.ChartDays);
+        }
+        finally
+        {
+            KeepOpen = keepOpen;
+            if (Visible) { Activate(); readings.Focus(); }
+        }
     }
 
     private void UpdateRangeButtons()
@@ -245,8 +276,8 @@ internal sealed class PopupForm : Form
     {
         if (refresh == null) return;
         var scale = ClientSize.Width / 440f;
-        refresh.Bounds = Scale(new Rectangle(24, 586, 190, 30), scale);
-        desktop.Bounds = Scale(new Rectangle(226, 586, 190, 30), scale);
+        refresh.Bounds = Scale(new Rectangle(24, 582, 190, 30), scale);
+        desktop.Bounds = Scale(new Rectangle(226, 582, 190, 30), scale);
         close.Bounds = Scale(new Rectangle(384, 56, 32, 28), scale);
         settingsButton.Bounds = Scale(new Rectangle(344, 56, 32, 28), scale);
         menuButton.Bounds = Scale(new Rectangle(304, 56, 32, 28), scale);
@@ -254,24 +285,19 @@ internal sealed class PopupForm : Form
         dayRange.Bounds = Scale(new Rectangle(266, 214, 46, 26), scale);
         weekRange.Bounds = Scale(new Rectangle(316, 214, 46, 26), scale);
         monthRange.Bounds = Scale(new Rectangle(366, 214, 50, 26), scale);
+        readings.Bounds = Scale(new Rectangle(166, 214, 92, 26), scale);
         resetList.Bounds = Scale(new Rectangle(40, 480, 360, 54), scale);
         Theme.SetFont(resetList, 12 * scale);
         resetList.ItemHeight = (int)(18 * scale);
-        connectionStatus.Bounds = Scale(new Rectangle(39, 550, 203, 33), scale);
+        connectionStatus.Bounds = Scale(new Rectangle(39, 546, 377, 34), scale);
         Theme.SetFont(connectionStatus, 12 * scale);
+        freshness.Bounds = Scale(new Rectangle(24, 615, 392, 17), scale);
+        Theme.SetFont(freshness, 10 * scale);
         Theme.SetFont(poolSelector, 12 * scale);
-        foreach (var button in new[] { refresh, desktop, close, menuButton, settingsButton, dayRange, weekRange, monthRange })
+        foreach (var button in new[] { refresh, desktop, close, menuButton, settingsButton, dayRange, weekRange, monthRange, readings })
             Theme.SetFont(button, (button == menuButton || button == settingsButton ? 20 : 13) * scale);
     }
     private static Rectangle Scale(Rectangle r, float s) => new Rectangle((int)(r.X * s), (int)(r.Y * s), (int)(r.Width * s), (int)(r.Height * s));
-    private static Button MakeButton(string text, bool primary)
-    {
-        var button = new Button { Text = text, FlatStyle = FlatStyle.Flat, BackColor = primary ? Theme.Mint : Theme.Card, ForeColor = primary ? Theme.Background : Theme.Text, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 13, GraphicsUnit.Pixel) };
-        button.FlatAppearance.BorderSize = 0;
-        button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(127, 232, 193) : Theme.Line;
-        return button;
-    }
-
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -283,7 +309,8 @@ internal sealed class PopupForm : Form
         using var border = new Pen(Theme.Line);
         g.DrawRectangle(border, 0, 0, 439, 635);
         Theme.Label(g, "Codex", 27, Theme.Text, new RectangleF(24, 18, 160, 37), FontStyle.Bold);
-        Theme.Label(g, "Remaining allowance", 12, Theme.Muted, new RectangleF(25, 62, 196, 23));
+        var lastKnown = snapshot != null && (failed || snapshot.IsStale(now) || snapshot.FiveHour?.ResetPending(now) == true || snapshot.Weekly?.ResetPending(now) == true);
+        Theme.Label(g, lastKnown ? "Last known allowance" : "Remaining allowance", 12, lastKnown ? Theme.Amber : Theme.Muted, new RectangleF(25, 62, 250, 23));
         if (!poolSelector.Visible)
         {
             Theme.RoundRect(g, Theme.Card, new RectangleF(300, 22, 116, 30), 8);
@@ -299,11 +326,12 @@ internal sealed class PopupForm : Form
         else if (snapshot?.FiveHour != null) DrawQuota(g, snapshot.FiveHour, "5-HOUR", 24, 392, now);
         else
         {
+            var connecting = busy || (snapshot == null && !failed);
             Theme.RoundRect(g, Theme.Card, new RectangleF(24, 104, 392, 92), 12);
-            Theme.Label(g, busy ? "Checking usage…" : "Usage unavailable", 23, Theme.Muted, new RectangleF(40, 116, 360, 36), FontStyle.Bold);
-            Theme.Label(g, "Available limits will appear here.", 12, Theme.Muted, new RectangleF(40, 161, 360, 24));
+            Theme.Label(g, connecting ? "Checking usage…" : "Usage unavailable", 23, Theme.Muted, new RectangleF(40, 116, 360, 36), FontStyle.Bold);
+            Theme.Label(g, connecting ? "Reading your signed-in Codex account." : snapshot != null ? "Codex did not report a supported usage limit." : "Open Codex to sign in, or use Menu → Setup.", 12, Theme.Muted, new RectangleF(40, 161, 360, 24));
         }
-        Theme.Label(g, "Remaining over time", 14, Theme.Text, new RectangleF(24, 217, 230, 24), FontStyle.Bold);
+        Theme.Label(g, "History · % left", 14, Theme.Text, new RectangleF(24, 217, 138, 24), FontStyle.Bold);
         if (snapshot?.Weekly != null)
         {
             Theme.Label(g, "Weekly used · last 24h", 10, Theme.Muted, new RectangleF(24, 250, 190, 16));
@@ -326,11 +354,7 @@ internal sealed class PopupForm : Form
 
         var stale = snapshot != null && snapshot.IsStale(now);
         using var dot = new SolidBrush(failed || stale ? Theme.Amber : busy ? Theme.Muted : Theme.Mint);
-        g.FillEllipse(dot, 25, 555, 6, 6);
-        var timing = snapshot == null ? "" : $"{(stale ? "Last read" : "Updated")} {snapshot.ReadAt.LocalDateTime:HH:mm}";
-        Theme.Label(g, timing, 11, Theme.Muted, new RectangleF(250, 550, 166, 16), alignment: StringAlignment.Far);
-        var next = !busy && nextAttempt > now ? "Next check in " + Theme.Countdown(nextAttempt, now) : "";
-        Theme.Label(g, next, 11, Theme.Muted, new RectangleF(250, 568, 166, 16), alignment: StringAlignment.Far);
+        g.FillEllipse(dot, 25, 551, 6, 6);
     }
 
     private void DrawQuota(Graphics g, QuotaWindow? quota, string title, float x, float width, DateTimeOffset now)
@@ -347,9 +371,10 @@ internal sealed class PopupForm : Form
             using var progress = new SolidBrush(color);
             g.FillRectangle(progress, x + 16, 181, (float)((width - 32) * quota.Remaining / 100), 5);
         }
-        var reset = quota?.ResetsAt.HasValue == true ? quota.ResetPending(now) ? "Now" : Theme.Countdown(quota.ResetsAt.Value, now) : "Unavailable";
+        var pending = quota?.ResetPending(now) == true;
+        var reset = quota?.ResetsAt.HasValue == true ? pending ? "Pending" : Theme.Countdown(quota.ResetsAt.Value, now) : "Unavailable";
         var resetWidth = width > 190 ? 136 : 74;
-        Theme.Label(g, "Resets in", 10, Theme.Muted, new RectangleF(x + width - 16 - resetWidth, 116, resetWidth, 18), alignment: StringAlignment.Far);
+        Theme.Label(g, pending ? "Reset due" : "Resets in", 10, Theme.Muted, new RectangleF(x + width - 16 - resetWidth, 116, resetWidth, 18), alignment: StringAlignment.Far);
         Theme.Label(g, reset, quota?.ResetsAt.HasValue == true ? 15 : 11, outdated ? Theme.Muted : Theme.Text,
             new RectangleF(x + width - 16 - resetWidth, 144, resetWidth, 25), FontStyle.Bold, StringAlignment.Far);
     }
@@ -464,8 +489,8 @@ internal sealed class PopupForm : Form
         {
             refresh.Font.Dispose(); desktop.Font.Dispose(); close.Font.Dispose(); poolSelector.Font.Dispose();
             menuButton.Font.Dispose(); settingsButton.Font.Dispose(); hints.Dispose(); poolMenu.Dispose();
-            dayRange.Font.Dispose(); weekRange.Font.Dispose(); monthRange.Font.Dispose(); resetList.Font.Dispose();
-            connectionStatus.Font.Dispose();
+            dayRange.Font.Dispose(); weekRange.Font.Dispose(); monthRange.Font.Dispose(); readings.Font.Dispose(); resetList.Font.Dispose();
+            connectionStatus.Font.Dispose(); freshness.Font.Dispose();
         }
         base.Dispose(disposing);
     }

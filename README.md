@@ -11,12 +11,17 @@ Download `CodexTray.exe` and run it. Requires Windows 10 1903+ or Windows 11 wit
 The app starts quietly in the tray. If the icon is hidden, look under the taskbar's **^** menu.
 
 - **Left click:** usage popup with reset countdowns, banked reset expiry times, average daily usage, and **24h / 7d / 30d** history.
+- **Readings…:** keyboard-accessible history table and CSV export for the selected usage pool. Choose a range, inspect a row, then use **Back** to keep that range in the popup.
 - **Right click** or **⋯:** menu, refresh controls, Start with Windows, Codex desktop, and the ChatGPT Microsoft Store page.
 - **⚙:** Display, Notifications, and About tabs. Choose numbers or rings, one or two icons, and automatic switching between limits.
 
 Icons change from green to amber to red as allowance runs low. Limits your account does not report are hidden. Separate Codex usage pools stay separate. The popup scales with Windows display settings.
 
 Hover over the chart to highlight a nearby recorded reading and see its local time and remaining percentages. This works in all three history ranges without additional requests.
+
+**Readings…** opens a stable snapshot of locally recorded history, newest first. Arrow keys navigate the table; the selected row shows its full local timestamp and UTC offset. Missing values appear as **—**, distinct from **0%**. **Export CSV…** saves that pool and range in chronological order, with UTC timestamps, full recorded numeric precision, and empty cells for unavailable limits. Reopen the view for newer readings; browsing and exporting make no usage requests.
+
+The popup labels stale, paused, failed, or reset-pending values as **Last known allowance**. An overdue reset stays **Pending** until Codex confirms it. Refresh cooldowns appear on the button, and older last-read times include the date. Connection and recovery messages use the full footer width.
 
 Bold dashed gray lines connect recorded readings across gaps in history; they do not represent measured usage during the gap.
 

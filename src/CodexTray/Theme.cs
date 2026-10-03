@@ -19,6 +19,15 @@ internal static class Theme
     public static readonly Color Red = Color.FromArgb(246, 107, 115);
     public static Color Quota(double remaining) => remaining <= 20 ? Red : remaining <= 50 ? Amber : Mint;
 
+    public static Button Button(string text, bool primary = false)
+    {
+        var button = new Button { Text = text, FlatStyle = FlatStyle.Flat, BackColor = primary ? Mint : Card,
+            ForeColor = primary ? Background : Text, Cursor = Cursors.Hand, Font = new Font("Segoe UI", 13, GraphicsUnit.Pixel) };
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(127, 232, 193) : Line;
+        return button;
+    }
+
     public static void SetFont(Control control, float size)
     {
         var previous = control.Font;

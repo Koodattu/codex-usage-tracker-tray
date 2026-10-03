@@ -152,7 +152,8 @@ internal sealed class TrayApplication : ApplicationContext
         primaryIcon.Visible = true;
         secondaryIcon.Visible = selection.Secondary.HasValue;
         rotationTimer.Enabled = selection.Rotating;
-        popup.UpdateUsage(snapshot, paused ? "Automatic refresh paused" : message, busy, failed || paused, paused ? DateTimeOffset.MinValue : policy.NextAttempt, policy.CanRefresh(now, true));
+        popup.UpdateUsage(snapshot, paused ? "Automatic refresh paused. Resume from the menu." : message, busy, failed || paused,
+            paused ? DateTimeOffset.MinValue : policy.NextAttempt, policy.CanRefresh(now, true), policy.ManualAllowedAt);
     }
 
     private static string Tooltip(string label, QuotaWindow? quota, bool stale, DateTimeOffset now, string poolName)

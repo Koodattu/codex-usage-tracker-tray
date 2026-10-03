@@ -24,6 +24,21 @@ internal static partial class Program
         try
         {
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
+            if (args.FirstOrDefault() == "--preview")
+            {
+                ProductPreview(args.Length > 1 ? args[1] : "fresh");
+                return 0;
+            }
+            if (args.FirstOrDefault() == "--status-checks")
+            {
+                StatusChecks();
+                return 0;
+            }
+            if (args.FirstOrDefault() == "--history-checks")
+            {
+                HistoryViewChecks();
+                return 0;
+            }
             if (args.FirstOrDefault() == "--update-smoke")
             {
                 using var updates = new ReleaseUpdates();
@@ -321,6 +336,8 @@ internal static partial class Program
                 }
             });
             Run("Popup renders live, empty and stale layouts at multiple sizes", RenderPreviews);
+            StatusChecks();
+            HistoryViewChecks();
             ChartHoverChecks();
             Run("Repeated layout retains the font cached by native controls", () =>
             {

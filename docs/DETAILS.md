@@ -14,6 +14,13 @@ Launching the executable adds a tray icon without opening a window, showing week
 - **Color**: green above 50% remaining, amber from 21–50%, red at 20% or below. Percentages round down. Gray with an amber dot indicates last-known data, a pending reset, or paused refresh. A dash or question mark means unavailable.
 - **Usage view**: remaining quota, reset countdowns, locally recorded usage, banked resets with individual expiry dates in local time, update time, and next check. The reset list scrolls when needed.
 - **Chart ranges**: select **24h**, **7d**, or **30d** for a rolling history window. The selected range is saved. These buttons use local history and make no network requests; they show quota remaining over time, not daily token totals.
+- **Readings…** beside the chart opens a native, read-only table for the selected pool. Tab to the table and use arrow/Page Up/Page Down keys to inspect rows; the detail below follows the current row. Back or Escape returns to the popup and saves the chosen chart range through the existing preference path. Changing a range keeps a selected reading when it remains within that range.
+
+### Inspecting and exporting history
+
+The readings view freezes the selected pool's available 30-day history when opened, so background updates cannot move a selected row or change an export while it is being inspected. Reopen it to include newer samples. Rows show local dates/times and remaining percentages to one decimal place; the detail shows seconds and the UTC offset, including daylight-saving changes. A dash means that limit was not reported, while zero means an observed zero. The detail flags an interval over 15 minutes before a selected reading; this does not reconstruct unobserved consumption. The chart and usage summaries retain their existing sampling caveats.
+
+**Export CSV…** saves only the selected pool and rolling range, ordered oldest first. It uses UTF-8, comma separators, UTC timestamps (`recorded_at_utc`), the Codex pool ID (`pool_id`), and full-precision numeric `five_hour_remaining_percent` / `weekly_remaining_percent` columns. Missing percentages are empty cells. No account identity, credentials, reset credits, or inferred samples are included. The normal Windows save dialog controls the destination and overwrite confirmation. A failed write preserves an existing file; the view stays open for another attempt. Exporting is an explicit local file operation and makes no network request.
 
 ### One or two tray icons
 
@@ -40,7 +47,7 @@ The app uses Codex's local `app-server` interface over redirected standard input
 
 Automatic checks run about every **five minutes**, with up to 15 seconds of jitter plus timer scheduling. Successful manual checks are limited to one per minute. Failures back off for 5, 10, 20, then 30 minutes; manual refresh respects that backoff. Requests never overlap and time out after 25 seconds. Opening the popup and changing display modes do not make network requests. Startup at Windows sign-in waits 20 seconds before checking.
 
-The UI updates countdowns every 15 seconds. After sleep, a due refresh runs when Windows resumes timer delivery. A passed reset timestamp is displayed as awaiting refresh; it does not manufacture a new 100% reading. Values older than ten minutes are marked as last known.
+The UI updates countdowns every 15 seconds. After sleep, a due refresh runs when Windows resumes timer delivery. A passed reset timestamp shows **Reset due / Pending**; it does not manufacture a new 100% reading. Values older than ten minutes, failed checks, paused checks, and pending resets show **Last known allowance**. The footer dates older readings, and a disabled Refresh button names its cooldown. Manual refresh continues to respect the same throttle and failure backoff.
 
 ## Data and privacy
 
@@ -51,7 +58,7 @@ The UI updates countdowns every 15 seconds. After sleep, a due refresh runs when
 - Every successful usage check appends observations for **all returned Codex pools** to `%LOCALAPPDATA%\CodexTray\history\<hashed-account>\YYYY-MM-DD.jsonl`. These are plain UTF-8 JSON Lines files: one JSON object per pool per check, containing a Unix timestamp, pool ID, and five-hour/weekly remaining percentages (null when unavailable). No credentials, email addresses, conversations, or raw backend responses are saved. The account folder is a SHA-256 hash derived from the account identity and plan; it separates histories but is not encryption. Codex does not expose a workspace identity through this account response, so separate workspaces under the same login cannot be distinguished by this check.
 - History survives restarts and switching pools. It is loaded after the first successful account/usage check so records from another login are not displayed. If account identity is unavailable, that run uses memory-only history. Changing account or plan selects a separate history folder.
 - Charts retain a rolling **30 days**, capped at 43,201 samples per pool in memory. Daily files use UTC dates; older files are removed on a successful write, keeping up to 31 daily files per account to cover the partial boundary day. Interrupted or malformed rows are skipped; storage failures show a message while live usage continues to work.
-- Chart gaps longer than 15 minutes, or missing readings for a limit, are bridged by thin gray lines between recorded values. These connectors do not reconstruct activity or add readings to history.
+- Chart gaps longer than 15 minutes, or missing readings for a limit, are bridged by dashed gray lines between recorded values. These connectors do not reconstruct activity or add readings to history.
 - Reset count is authoritative even when the service caps the details list. Available reset details appear individually, earliest expiry first. Missing details are explicitly labeled unavailable; a reported null expiry means no expiry. Reset details are refreshed from Codex and are not stored in chart history.
 
 Example history row (synthetic):
@@ -99,6 +106,8 @@ Prerequisites: Windows, a .NET SDK that supports building .NET Framework project
 The script builds Release with warnings as errors, runs the dependency-free verification executable, then copies the standalone app into `dist`. Development symbols and generated runtime configuration remain in the build directory; the shipped executable runs on the Windows-provided runtime without those files.
 
 The verification suite covers quota selection, separate pools, missing values, overage, individual reset expiries, timestamp handling, backoff, 24h/7d/30d chart ranges, history bounds, persistence across restarts, account separation, interrupted writes, retention cleanup, storage failures, real JSON-RPC process transport, interleaved messages, cancellation and process cleanup, both icon modes at 16–64 pixels, numeric clipping, icon selection/fallback, rotation timing, popup menu/settings buttons, and rendering at 100%, 150%, and 200% sizes. Rendered samples in `.artifacts/preview-*.png` and `.artifacts/tray-numbers.png` use **synthetic test data**.
+
+It also checks readable first-use recovery at all three scales, refresh/reset status, the popup-to-readings modal journey, retained range and selection, missing/zero values, export culture independence and write-failure recovery, and a full 43,201-row history. For an interactive synthetic-only preview of the overview and readings, run `CodexTray.Tests.exe --preview` (or append `empty`, `error`, or `reset`). App shortcuts, settings, and refresh are disabled; it makes no account requests or preference/registry changes. Close the preview before rebuilding its executable. This is a development aid, not part of the shipped EXE.
 
 Optional read-only integration checks, run as the Windows user signed into Codex:
 
